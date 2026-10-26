@@ -1,0 +1,142 @@
+.root,
+.group {
+  min-width: 0;
+}
+
+.root {
+  flex: none;
+  padding-bottom: 12px;
+}
+
+.group {
+  margin-top: 4px;
+}
+
+.heading {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-radius: var(--dsw-radius-sm);
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+  list-style: none;
+  font-size: 12px;
+  line-height: 20px;
+}
+
+.heading::-webkit-details-marker {
+  display: none;
+}
+
+.heading::before {
+  content: '';
+  flex: none;
+  width: 5px;
+  height: 5px;
+  border-top: 1px solid currentColor;
+  border-right: 1px solid currentColor;
+  transform: rotate(45deg);
+  margin-right: 3px;
+}
+
+.group[open] > .heading::before {
+  transform: rotate(135deg);
+}
+
+.name,
+.sessionTitle {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.name {
+  flex: 1;
+}
+
+.status {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  corner-shape: round;
+  background: var(--dsw-alias-label-tertiary);
+}
+
+.status[data-status='connected'] {
+  background: var(--dsw-alias-state-success-primary);
+}
+
+.status[data-status='connecting'] {
+  background: var(--dsw-alias-state-business-primary);
+}
+
+.status[data-status='error'] {
+  background: var(--dsw-alias-state-error-primary);
+}
+
+.count {
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+.session,
+.manage {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 32px;
+  border: none;
+  border-radius: var(--dsw-radius-md);
+  padding: 5px 8px 5px 28px;
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  cursor: pointer;
+  text-align: left;
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.session[aria-current='page'] {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.manage {
+  margin-top: 4px;
+  padding-left: 8px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+}
+
+.empty,
+.error {
+  margin: 0;
+  padding: 5px 8px 5px 28px;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+  overflow-wrap: anywhere;
+}
+
+.error {
+  padding-left: 8px;
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.heading:focus-visible,
+.session:focus-visible,
+.manage:focus-visible {
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color);
+  outline-offset: -2px;
+}
+
+@media (hover: hover) {
+  .heading:hover,
+  .session:hover,
+  .manage:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
+}

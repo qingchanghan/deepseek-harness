@@ -25,6 +25,8 @@ kind: "package-reference"
 
 -----
 
+远程空白 Session 使用其 Host 标注和工作目录显示目标并启用输入框。其 Workspace 不必出现在 Local 注册表中；点击目标标签会打开新会话的目标选择流程。
+
 <a id="conversation-assembly"></a>
 ## Conversation 组装
 

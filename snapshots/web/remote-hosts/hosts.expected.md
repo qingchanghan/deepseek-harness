@@ -1,0 +1,18 @@
+- banner:
+  - heading "主机" [level=1]
+  - paragraph: 按主机分组查看本地会话和通过 SSH 连接的远程开发机会话。
+  - button "刷新"
+  - button "添加远程主机"
+- region "Loopback development machine":
+  - heading "Loopback development machine" [level=2]
+  - text: SSH 远程会话
+  - status: 已连接
+  - text: 1 个会话
+  - button "重新连接"
+  - button "断开"
+  - button "编辑"
+  - button "移除"
+  - paragraph: fixture
+  - list:
+    - listitem:
+      - button "Recorded remote Session 2026/9/1 {{clock}}"

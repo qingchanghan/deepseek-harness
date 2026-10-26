@@ -242,6 +242,9 @@ function sessionVisible(
   archivedFilter: ArchivedFilter,
 ): boolean {
   if (session.origin === 'subagent') return false
+  // Attached remote Sessions belong to the Hosts panel, not to a local
+  // Workspace's session list.
+  if (session.host !== undefined) return false
   if (session.blank && session.id !== current) return false
   switch (archivedFilter) {
     case 'default':

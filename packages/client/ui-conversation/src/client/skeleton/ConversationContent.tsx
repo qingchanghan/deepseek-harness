@@ -23,7 +23,7 @@ export function ConversationContent(props: ConversationContentProps) {
   const {
     sessionId, phase, hero, useSession, useSessions, useSessionStatus,
     useWorkspaces, useInput, useComposerBlock, renderSlot, renderSlotChain,
-    selectWorkspace, t, useFactorySlot,
+    selectWorkspace, requestNewSession, t, useFactorySlot,
   } = props
   const session = useSession(snapshot => snapshot)
   const Views = useFactorySlot('views', ConversationSessionView)
@@ -32,7 +32,9 @@ export function ConversationContent(props: ConversationContentProps) {
   const pendingInteraction = useSessionStatus(snapshot =>
     sessionId === undefined ? undefined : snapshot.get(sessionId)?.pendingInteraction)
   const inputState = useInput(s => s)
-  const cwd = useSessions(s => sessionId === undefined ? undefined : s.byId[sessionId]?.cwd)
+  const summary = useSessions(s => sessionId === undefined ? undefined : s.byId[sessionId])
+  const cwd = summary?.cwd
+  const remoteHost = summary?.host
   const workspaces = useWorkspaces(s => s)
   // A plugin this package cannot import (ui-model-selection) says this session cannot
   // send; its reason is already localized by whoever raised it.
@@ -88,15 +90,17 @@ export function ConversationContent(props: ConversationContentProps) {
 
   // The chip is a selector; label resolution walks the flow top-down:
   //   1. a just-picked workspace (pending) → its title;
-  //   2. cold start, no session yet → placeholder ("Choose workspace");
-  //   3. the blank session's workspace is in the list → its title;
-  //   4. list still loading → cwd folder name bridges so the title does not
+  //   2. an attached Host → its name and the remote working directory;
+  //   3. cold start, no session yet → placeholder ("Choose workspace");
+  //   4. the blank session's workspace is in the list → its title;
+  //   5. list still loading → cwd folder name bridges so the title does not
   //      flash on refresh (empty cwd → placeholder);
-  //   5. list ready but no owning workspace (deleted from the sidebar) →
+  //   6. list ready but no owning workspace (deleted from the sidebar) →
   //      placeholder, never the deleted folder's name via cwd.
   // A title still automatic reads in the reader's language, matching the
   // sidebar row the same Workspace has there.
   const storedChipTitle = pendingWorkspace?.title
+    ?? (remoteHost !== undefined && cwd !== undefined && cwd !== '' ? t('hero.remoteWorkspace', { host: remoteHost.name, workspace: workspaceLabel(cwd) }) : undefined)
     ?? (sessionId === undefined
       ? undefined
       : sessionWorkspace?.title
@@ -113,7 +117,10 @@ export function ConversationContent(props: ConversationContentProps) {
         buttonRef={pickerAnchor}
         label={chipTitle}
         menuOpen={pickerOpen}
-        onClick={() => { setPickerOpen(open => !open) }}
+        onClick={() => {
+          if (remoteHost !== undefined) requestNewSession()
+          else setPickerOpen(open => !open)
+        }}
         t={t}
       />
       {renderSlot('conversation.hero.workspace', {

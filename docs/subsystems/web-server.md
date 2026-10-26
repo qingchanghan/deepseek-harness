@@ -160,6 +160,96 @@ Types: [Principal](typert.md)
 
 Source: [`packages/client/connection/src/rpc.ts`](../../packages/client/connection/src/rpc.ts)
 
+<a id="ctxremotehosts--remotehosts"></a>
+
+### `ctx.remoteHosts` — `RemoteHosts`
+
+SSH-attached remote Host transport owner.
+
+```ts cordis-catalog
+/**
+ * Every configured host and its attachment lifecycle.
+ * @returns stable-order status rows.
+ */
+list(): RemoteHostStatus[]
+
+/**
+ * Read connection settings and current states, including empty remote hosts.
+ * @returns Current host rows and the revision needed for persistent edits.
+ */
+@Remote describe(): RemoteHostsSnapshot
+
+/**
+ * Persist a revision-checked connection list and start newly configured connections.
+ * A connection failure keeps its configuration and is reported in its host row.
+ * @param request - Complete connection list and its last observed revision.
+ * @returns Persisted connection settings and current attachment states.
+ * @throws {RemoteError} `remote-hosts/configuration-rejected` when validation or persistence fails;
+ * `remote-hosts/conflict` when another edit changed the configuration revision.
+ */
+@Remote async setHosts(request: RemoteHostsUpdate): Promise<RemoteHostsSnapshot>
+
+/**
+ * Retry one configured connection immediately.
+ * @param id - Configured host identity.
+ * @returns Current connection settings and attachment states.
+ * @throws {RemoteError} `remote-hosts/not-found` when the host was removed.
+ */
+@Remote async reconnect(id: string): Promise<RemoteHostsSnapshot>
+
+/**
+ * Stop a connection and its automatic retries without deleting its settings.
+ * @param id - Configured host identity.
+ * @returns Current connection settings and attachment states.
+ * @throws {RemoteError} `remote-hosts/not-found` when the host was removed.
+ */
+@Remote async disconnectHost(id: string): Promise<RemoteHostsSnapshot>
+
+/**
+ * Attached hosts, in configuration order.
+ * @returns one handle per usable Remote connection.
+ */
+connected(): readonly RemoteHostHandle[]
+
+/**
+ * Resolve a usable connection without silently selecting another Host.
+ * @param id - Configured Host identity.
+ * @returns Current connection handle.
+ */
+connection(id: string): RemoteHostHandle
+
+/**
+ * Read the selected Host's Workspaces, closing the baseline stream afterwards.
+ * @param id - Configured Host identity.
+ * @param signal - Cancel a superseded picker read.
+ * @returns Remote Workspaces in their saved order.
+ */
+@Remote workspaces(id: string, signal: AbortSignal): Promise<{ items: RemoteHostWorkspace[] }>
+
+/**
+ * Add an existing directory to the selected Host's Workspace registry.
+ * @param id - Configured Host identity.
+ * @param path - Absolute directory on that Host.
+ * @returns The remote Workspace.
+ */
+@Remote createWorkspace(id: string, path: string): Promise<RemoteHostWorkspace>
+
+/**
+ * Attach one configured host, republishing a previous failure.
+ * @param id - configured host identity.
+ * @param signal - caller cancellation.
+ */
+async connect(id: string, signal?: AbortSignal): Promise<void>
+
+/**
+ * Detach one configured host, keeping its configuration.
+ * @param id - configured host identity.
+ */
+async disconnect(id: string): Promise<void>
+```
+
+Source: [`packages/api/remote-hosts/src/index.ts`](../../packages/api/remote-hosts/src/index.ts)
+
 <a id="ctxwebapp--webapp"></a>
 
 ### `ctx.webApp` — `WebApp`
@@ -276,6 +366,26 @@ Admit or wrap an authenticated shared API request, including body transfer. Exis
 ```
 
 Source: [`packages/client/connection/src/index.ts`](../../packages/client/connection/src/index.ts)
+
+<a id="remote-hosts-events"></a>
+
+### `remote-hosts/*` events
+
+<a id="remote-hostschanged--emit"></a>
+
+#### `remote-hosts/changed` — emit
+
+A configured host or its connection state changed.
+
+```ts cordis-catalog
+/**
+ * A configured host or its connection state changed.
+ * @mode emit
+ */
+'remote-hosts/changed'(): void
+```
+
+Source: [`packages/api/remote-hosts/src/types.ts`](../../packages/api/remote-hosts/src/types.ts)
 
 <a id="webserver-events"></a>
 

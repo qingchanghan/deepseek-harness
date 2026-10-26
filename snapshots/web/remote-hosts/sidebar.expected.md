@@ -1,0 +1,6 @@
+- group:
+  - text: Loopback development machine
+  - status "已连接"
+  - text: "1"
+  - button "Recorded remote Session"
+- button "管理远程主机…"

@@ -148,6 +148,10 @@ export function apply(ctx: Context): void {
     subscribe: listener => ctx.slots.subscribe(hole, listener),
   })
   const browserFlowSource = flowSource('sidebar.workspaces.directoryFlow')
+  const hostGroups: HostObservable<boolean> = {
+    getSnapshot: () => ctx.slots.entries('sidebar.workspaces.hosts').length > 0,
+    subscribe: listener => ctx.slots.subscribe('sidebar.workspaces.hosts', listener),
+  }
   const hostInfo: HostObservable<RemoteHostFacts> = {
     getSnapshot: () => ctx.remote.$host,
     subscribe: listener => ctx.on('connection/reset', listener),
@@ -281,7 +285,10 @@ export function apply(ctx: Context): void {
     requestAddWorkspace: shortcutControls.add,
     closeAddWorkspace: shortcutControls.closeAdd,
     setDirectoryBusy: shortcutControls.directoryBusy,
-    hooks: { directoryFlow: browserFlowSource, hostInfo, workspaceShortcuts: shortcutControls.state, shortcuts: ctx.shortcuts.catalog },
+    hooks: {
+      directoryFlow: browserFlowSource, hostGroups, hostInfo,
+      workspaceShortcuts: shortcutControls.state, shortcuts: ctx.shortcuts.catalog,
+    },
   })
   const pickerInjected = (): WorkspacePickerInjected => ({
     createWorkspace: input => workspaces.create(input),
@@ -293,6 +300,7 @@ export function apply(ctx: Context): void {
     {
       name: 'sidebar.workspaces',
       children: {
+        'sidebar.workspaces.hosts': { kind: 'single', scope: 'root' },
         'sidebar.workspaces.directoryFlow': { kind: 'single', scope: 'root' },
         // Every row entry reads the menu's open state through a hook bound
         // from the row's render occurrence (the owner passes the state pair

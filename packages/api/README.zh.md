@@ -34,6 +34,7 @@ kind: "package-group"
 | [`settings-controller/`](settings-controller/README.zh.md) | 拥有 settings 域各 seam 之上的配置界面读写。 | `ctx.settingsController`、`ctx.credentialsController` / `ctx.remote.settings`、`ctx.remote.credentials` |
 | [`workspace-controller/`](workspace-controller/README.zh.md) | 拥有 Workspace 变更与完整 Client Workspace 投影。 | `ctx.workspaceController` / `ctx.remote.workspace` |
 | [`terminal-controller/`](terminal-controller/README.zh.md) | Session 拥有的交互式 shell、屏幕恢复和浏览器终端控制。 | `ctx.terminalController` / `ctx.remote.terminal` |
+| [`remote-hosts/`](remote-hosts/README.zh.md) | 把本机 Host 连接到 SSH 机器上的 dsh Web 进程，并提供其会话传输。 | — |
 | [`workspace-files/`](workspace-files/README.zh.md) | 拥有有界的工作区文件访问——`stat`、分页 `read`、`list` 与已埋点操作的 `changes` 流——以及其上的 Client `file` 资源提供方。 | `ctx.workspaceFiles` / `ctx.remote.workspaceFiles` |
 
 Remote 调用沿 Client → Host 方向运行在应用共享的 Connection 之上；流项沿 Host → Client 方向经 Gateway mux 传输，流的上行项则沿 Client → Host 方向走同一条逻辑流。API Gateway 拥有 Remote 传输，各控制器包分别拥有 Session、配置界面与 Workspace 行为。流式下载等不适合 Remote 调用的响应由功能包注册精确的 Connection Fetch 路由。

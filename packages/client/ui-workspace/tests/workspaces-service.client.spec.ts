@@ -320,6 +320,15 @@ function lastOpening(open: MockInstance<UiWorkspaceService['openWorkspace']>): P
 }
 
 describe('UiWorkspaceService', () => {
+  it('lets a destination picker own an unscoped New Session gesture', () => {
+    const b = bench()
+    const picker = vi.fn(() => true)
+    b.ctx.on('ui-workspace/new-session', picker)
+    b.uiWorkspace.startSession()
+    expect(picker).toHaveBeenCalledOnce()
+    expect(b.sessions.create).not.toHaveBeenCalled()
+    expect(b.selectPanel).not.toHaveBeenCalled()
+  })
   it('prepares and selects the default Workspace after both startup baselines', async () => {
     const b = bench({ configureWorkspaces: (workspaces) => {
       workspaces.initializeDefault.mockImplementation(async () => {

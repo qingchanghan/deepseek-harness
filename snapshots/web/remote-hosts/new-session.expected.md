@@ -1,0 +1,11 @@
+- text: 主机
+- radiogroup "主机":
+  - radio "Local"
+  - radio "Loopback development machine" [checked]
+- text: 工作区
+- radiogroup "工作区":
+  - radio "remote-project {{cwd}}/remote-project" [checked]
+- text: 添加工作区目录
+- textbox "添加工作区目录"
+- text: 填写所选主机上已有目录的绝对路径。
+- button "添加工作区" [disabled]

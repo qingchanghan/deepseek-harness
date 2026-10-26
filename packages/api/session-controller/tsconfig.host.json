@@ -20,7 +20,8 @@
     "src/media-references.ts",
     "src/model-selection-projection.ts",
     "src/archived-session-gate.ts",
-    "src/skill-catalog.ts"
+    "src/skill-catalog.ts",
+    "src/remote-hosts.ts"
   ],
   "references": [
     {
@@ -31,6 +32,9 @@
     },
     {
       "path": "../../core/agent"
+    },
+    {
+      "path": "../remote-hosts"
     },
     {
       "path": "../../core/agent-default-model"

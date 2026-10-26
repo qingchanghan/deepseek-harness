@@ -873,7 +873,7 @@ inspect( sessionId: SessionId, signal?: AbortSignal, ): Promise<SessionInspectio
  * @param request - Session identity and requested model selection.
  * @returns the normalized selection installed for the Session, without waiting for default persistence.
  */
-@Remote('selectModel') selectModel(request: SessionSelectModelRequest): Promise<SessionSelectModelValue>
+@Remote('selectModel') async selectModel(request: SessionSelectModelRequest): Promise<SessionSelectModelValue>
 
 /**
  * Select the first available account model after login when no provider API key is configured.
@@ -922,7 +922,7 @@ workspaceDesktop(): { name: string; available: boolean; fileManager: 'finder' | 
  * @param request - Session identity and proposed title.
  * @returns the accepted title and durable event sequence.
  */
-@Remote('rename') rename(request: SessionRenameRequest): Promise<SessionRenameValue>
+@Remote('rename') async rename(request: SessionRenameRequest): Promise<SessionRenameValue>
 
 /**
  * Fork one cold-readable exact event prefix into a new Session. An omitted
@@ -946,21 +946,21 @@ workspaceDesktop(): { name: string; available: boolean; fileManager: 'finder' | 
  * @param request - Session and attachment identities used for authorization.
  * @returns the durable attachment reference and base64-encoded bytes.
  */
-@Remote('attachment') attachment(request: SessionAttachmentRequest): Promise<SessionAttachmentValue>
+@Remote('attachment') async attachment(request: SessionAttachmentRequest): Promise<SessionAttachmentValue>
 
 /**
  * Mutate one still-pending queue occurrence, resuming a cold Agent first.
  * @param request - Session, queue item, and requested mutation.
  * @returns acknowledgement that the queue mutation was applied.
  */
-@Remote('updateQueue') updateQueue(request: SessionUpdateQueueRequest): Promise<SessionUpdateQueueValue>
+@Remote('updateQueue') async updateQueue(request: SessionUpdateQueueRequest): Promise<SessionUpdateQueueValue>
 
 /**
  * Cancel one active Agent turn without dropping its pending inbox.
  * @param request - Session whose active Agent turn is cancelled.
  * @returns acknowledgement that cancellation was requested.
  */
-@Remote('cancel') cancel(request: SessionCancelRequest): SessionCancelValue
+@Remote('cancel') async cancel(request: SessionCancelRequest): Promise<SessionCancelValue>
 
 /**
  * Read one cold-safe, message-aligned Session history page.
@@ -968,7 +968,7 @@ workspaceDesktop(): { name: string; available: boolean; fileManager: 'finder' | 
  * @param signal - cancellation for persistence reads.
  * @returns one chronological page.
  */
-@Remote({ name: 'page', resources: { session: addressedSession } }) page(request: SessionPageRequest, signal: AbortSignal): Promise<SessionPage>
+@Remote({ name: 'page', resources: { session: addressedSession } }) async page(request: SessionPageRequest, signal: AbortSignal): Promise<SessionPage>
 
 /**
  * Follow one Session log from its opening or resume cursor.
@@ -1183,6 +1183,22 @@ A Session became visible or its Agent was created or disposed. Consumers upsert 
  * @param summary - current list row for the Session.
  */
 'api-session/added'(summary: SessionSummary): void
+```
+
+Source: [`packages/api/session-controller/src/types.ts`](../../packages/api/session-controller/src/types.ts)
+
+<a id="api-sessioncatalog-changed--emit"></a>
+
+#### `api-session/catalog-changed` — emit
+
+Session directory membership changed and clients must query a fresh list.
+
+```ts cordis-catalog
+/**
+ * Session directory membership changed and clients must query a fresh list.
+ * @mode emit
+ */
+'api-session/catalog-changed'(): void
 ```
 
 Source: [`packages/api/session-controller/src/types.ts`](../../packages/api/session-controller/src/types.ts)

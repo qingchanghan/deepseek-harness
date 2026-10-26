@@ -409,6 +409,15 @@ export class SessionManager {
 
   // ---- List API ----
 
+  private listInvalidated = false
+
+  /** Coalesce invalidations while ensuring a change during a read gets a subsequent baseline. */
+  invalidateList(): void {
+    if (this.disposed) return
+    if (this.listInflight !== null) { this.listInvalidated = true; return }
+    void this.refreshList()
+  }
+
   /** Full refresh via session.list (single-flight within one Host generation). */
   refreshList(): Promise<void> {
     if (this.listInflight !== null) return this.listInflight
@@ -469,6 +478,10 @@ export class SessionManager {
         if (this.listMutations === mutations) {
           this.listMutations = null
           this.listInflight = null
+          if (this.listInvalidated && !this.disposed) {
+            this.listInvalidated = false
+            void this.refreshList()
+          }
           this.notifier.markDirty()
         }
       }
@@ -507,6 +520,7 @@ export class SessionManager {
   */
   async create(
     opts: {
+      hostId?: string
       workspaceId?: WorkspaceId
       cwd?: string
       sessionId?: SessionId
@@ -514,6 +528,7 @@ export class SessionManager {
     } = {},
   ): Promise<RemoteResult<{ sessionId: SessionId }>> {
     const shared = {
+      ...(opts.hostId === undefined ? {} : { hostId: opts.hostId }),
       ...(opts.sessionId === undefined ? {} : { sessionId: opts.sessionId }),
       ...(opts.agentPreset === undefined ? {} : { agentPreset: opts.agentPreset }),
     }
@@ -524,6 +539,7 @@ export class SessionManager {
     if (result.ok) {
       this.recordMutation({ kind: 'placeholder', summary: { agentAvailable: true,
         sessionId: result.value.sessionId, updatedAt: Date.now(), running: false, blank: true,
+        ...(result.value.host === undefined ? {} : { host: result.value.host }),
         ...(opts.cwd !== undefined ? { cwd: opts.cwd } : {}),
       } })
     } else {
@@ -799,6 +815,7 @@ export class SessionManager {
         && prev.blank === entry.blank
         && prev.parentSessionId === entry.parentSessionId && prev.cwd === entry.cwd
         && prev.origin === entry.origin && prev.title === entry.title && prev.depth === entry.depth
+        && prev.host?.id === entry.host?.id && prev.host?.name === entry.host?.name
         && prev.formatStatus === entry.formatStatus
         && prev.projectionValues === entry.projectionValues
       ) return prev
@@ -842,6 +859,7 @@ function applyMutation(summaries: readonly SessionSummary[], mutation: SessionLi
           ...(mutation.summary.formatStatus === undefined ? {} : { formatStatus: mutation.summary.formatStatus }),
         } : {}),
         ...(existing.cwd === undefined && mutation.summary.cwd !== undefined ? { cwd: mutation.summary.cwd } : {}),
+        ...(existing.host === undefined && mutation.summary.host !== undefined ? { host: mutation.summary.host } : {}),
         ...(existing.parentSessionId === undefined && mutation.summary.parentSessionId !== undefined
           ? { parentSessionId: mutation.summary.parentSessionId } : {}),
         ...(existing.origin === undefined && mutation.summary.origin !== undefined
@@ -850,7 +868,7 @@ function applyMutation(summaries: readonly SessionSummary[], mutation: SessionLi
       if (filled.cwd === existing.cwd && filled.parentSessionId === existing.parentSessionId
         && filled.origin === existing.origin && filled.blank === existing.blank
         && filled.agentAvailable === existing.agentAvailable && filled.running === existing.running
-        && filled.formatStatus === existing.formatStatus
+        && filled.formatStatus === existing.formatStatus && filled.host === existing.host
       ) return [...summaries]
       return summaries.map(summary => summary.sessionId === mutation.summary.sessionId ? filled : summary)
     }

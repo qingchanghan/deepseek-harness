@@ -126,6 +126,9 @@ No direct effect; model requests remain owned by the Agent and LLM packages.
 - That memory is not shared between tabs: one tab can show a converted row while another still shows `New Session` for the same Session.
 
 
+
+`session.create` accepts an optional `hostId` to create on an attached Host. Workspace ids and directories are interpreted there. A disconnected target fails without falling back to local creation. The response includes the owning `host`, and routing plus Client catalog metadata are available before the first history follow or prompt.
+
 <a id="dev-note"></a>
 ### Dev Note
 

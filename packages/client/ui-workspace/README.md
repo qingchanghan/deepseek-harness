@@ -31,6 +31,9 @@ Use the sidebar to browse Workspaces and their Sessions, reorder them, and start
 
 History rows without a stored title use the localized unnamed label (未命名 / Untitled), rather than a directory name. The current blank row remains New Session; other blank rows remain hidden. Rename drafts use the stored title, or start empty when unnamed; unnamed rows do not offer title copying.
 
+With [ui-remote-hosts](../ui-remote-hosts/README.md), this browser groups its local tree under **Local** and renders remote host groups through `sidebar.workspaces.hosts`. The groups share one scrolling region; the host contribution receives the current search query.
+
+
 ### Reordering and view options
 
 Pinned Sessions lead ordinary Sessions in both grouped and flat views. **Last updated** sorts each partition strictly by the latest user prompt or steer time, newest first; pin time does not affect it. **Manual** uses the relative positions in one complete Session sequence, including hidden archives. Returning to Last updated discards the manual layout, and entering Manual again freezes the then-current chronological order. The browser defaults to Last updated and remembers the selected mode across reloads.
@@ -222,6 +225,9 @@ These limits define the search depth, the archive surface, and the picking carri
 - **No Session deletion** — sessions can be archived but never deleted; archived rows stay recoverable in place through the archived view filter and the search results' unarchive action, and Workspace registration deletion does not delete Sessions.
 - **Pending user interaction is not aggregated into collapsed groups** — a waiting row inside a collapsed group lights no group-header indicator and becomes visible only after that group is expanded.
 - **Native folder selection depends on the local Host carrier** — under the `-native` composition, in-process or remote browser deployments cannot open a local operating-system dialog; remote-capable picking is the `-browse` composition's in-app flow.
+
+
+An unscoped **New Session** gesture first offers `ui-workspace/new-session` to composed destination pickers. A listener returning `true` owns that gesture; otherwise normal Local selection continues. Explicit Workspace targets and initialized drafts retain their existing navigation path. The [remote-host picker](../ui-remote-hosts/README.md) supplies the host choice.
 
 <a id="dev-note"></a>
 ### Dev Note

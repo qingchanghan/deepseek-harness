@@ -1,0 +1,31 @@
+# Bilingual-pair consistency record for 2026-10-23-ssh-attached-remote-hosts.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-10-23-ssh-attached-remote-hosts.md
+/agent-note-ssh-attached-remote-hosts:
+  en: f6d4ac3daedc2470
+  zh: 5430937aae251196
+/agent-note-ssh-attached-remote-hosts/problem:
+  en: 41f84b050d8ae51b
+  zh: 4d6fb13ff56a81e5
+/agent-note-ssh-attached-remote-hosts/decision:
+  en: 7fd9f5328e8a0e66
+  zh: f3b042a257dbea11
+/agent-note-ssh-attached-remote-hosts/decision/instance-attachment:
+  en: b3370c9d8509cef0
+  zh: a7e245f28b27e6e9
+/agent-note-ssh-attached-remote-hosts/decision/session-federation:
+  en: 8fb3d66780f6db64
+  zh: 644104b40e538714
+/agent-note-ssh-attached-remote-hosts/decision/presentation:
+  en: 5ac1f51629603e3a
+  zh: e38d0ab0c18577b6
+/agent-note-ssh-attached-remote-hosts/alternatives-considered:
+  en: 27764fd4c9c09452
+  zh: 3aaaa69947f1db42
+/agent-note-ssh-attached-remote-hosts/consequences:
+  en: 391b84cc4578fd6c
+  zh: e49159d6f1fcc017
+/agent-note-ssh-attached-remote-hosts/testing:
+  en: de54f83feb3b1564
+  zh: 83e8b958830153f1

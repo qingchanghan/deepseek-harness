@@ -124,6 +124,7 @@
     "tests/account-login.e2e.ts",
     "tests/onboarding-usable-provider.e2e.ts",
     "tests/remote-settings.e2e.ts",
+    "tests/remote-hosts.e2e.ts",
     "tests/public-mount.e2e.ts",
     "tests/workspace-new-session-folding.e2e.ts",
     "tests/workspace-management.e2e.ts",

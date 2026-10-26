@@ -130,6 +130,7 @@ function mount(
     overlayTakeover?: boolean
     /** The session list summary's `blank` flag — independent of the snapshot's. */
     summaryBlank?: boolean
+    host?: { id: string; name: string }
     /** Drop the session's summary row entirely (a session the list has not caught up with). */
     omitSummaryRow?: boolean
     /** Classify the selected child as a subagent instead of an ordinary fork. */
@@ -152,6 +153,7 @@ function mount(
   }
   const childRow = {
     id: SID, displayTitle: 'Child', parentId: options.nestedSubagent === true ? parent : root,
+    ...(options.host === undefined ? {} : { host: options.host }),
     cwd: '/projects/one', running: false, retainedBy: { mainView: 1 }, blank: options.summaryBlank ?? false, updatedAt: 3,
     ...(options.summaryOrigin === undefined ? {} : { origin: options.summaryOrigin }),
   }
@@ -182,6 +184,7 @@ function mount(
   const useInput = bindSnapshotSelector(wiring.state)
   const inputActions = wiring.actions
   const stop = vi.fn()
+  const requestNewSession = vi.fn()
   const open = vi.fn()
   const slotCalls: string[] = []
   const lineageOwners: ConversationHeaderLineageOwnerProps[] = []
@@ -349,6 +352,7 @@ function mount(
       renderSlotChain,
       renderFactorySlot,
       selectWorkspace: retargetWorkspace,
+      requestNewSession,
       t,
     }
     const useFactorySlot = ((name: string, fallback: (props: never) => ReactNode) => (
@@ -379,7 +383,7 @@ function mount(
   const props: ConversationSlotProps = { ...runtimeProps, renderSlot, renderFactorySlot }
   const view = render(<ConversationMainPanel {...props} />)
   return {
-    view, store, wiring, sink, retargetWorkspace, session, conversation, slotCalls, lineageOwners, seatOwners, open,
+    view, store, wiring, sink, retargetWorkspace, requestNewSession, session, conversation, slotCalls, lineageOwners, seatOwners, open,
     pickerOwner: () => pickerOwner,
     rerender: () => { view.rerender(<ConversationMainPanel {...props} />) },
   }
@@ -534,6 +538,17 @@ describe('ConversationRoot resident composer', () => {
     const fallback = b.view.container.querySelector('[data-chain-overlay-fallback="conversation.composer"]')
     expect(seat?.contains(takeover)).toBe(true)
     expect(seat?.contains(fallback)).toBe(true)
+  })
+
+  it('accepts a remote blank without requiring its Workspace in the Local registry', () => {
+    const b = mount(sessionSnapshotOf({ blank: true }), [], undefined, {
+      summaryBlank: true, host: { id: 'h20', name: 'H20-141-sy' },
+    })
+    expect(b.view.getByText('H20-141-sy / one')).toBeTruthy()
+    expect(b.view.getByRole('textbox').getAttribute('contenteditable')).toBe('true')
+    fireEvent.click(b.view.getByRole('button', { name: '选择工作区' }))
+    expect(b.requestNewSession).toHaveBeenCalledOnce()
+    expect(b.retargetWorkspace).not.toHaveBeenCalled()
   })
 
   it('hero phase: keeps sidebar controls accessible while hiding conversation chrome', () => {

@@ -315,6 +315,48 @@
   padding-left: 0;
 }
 
+.hostGroups {
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  padding-right: var(--dsh-session-list-edge-inset);
+}
+
+.localHost {
+  flex: none;
+  min-width: 0;
+}
+
+.hostHeading {
+  padding: 6px 8px;
+  border-radius: var(--dsw-radius-sm);
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 20px;
+  cursor: pointer;
+}
+
+.hostHeading:focus-visible {
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color);
+  outline-offset: -2px;
+}
+
+.hostGroups .list {
+  overflow: visible;
+  margin: 0;
+  padding: 0 0 4px;
+  scrollbar-gutter: auto;
+}
+
+.hostGroups .fade {
+  display: none;
+}
+
+@media (hover: hover) {
+  .hostHeading:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
+}
+
 /* Relative for the bottom fade overlay. */
 .treeBody {
   flex: 1;

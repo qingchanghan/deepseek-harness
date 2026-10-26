@@ -1968,6 +1968,80 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'remoteHosts',
+    summary: 'SSH-attached remote Host transport owner.',
+    description: 'SSH-attached remote Host transport owner.',
+    methods: [
+      {
+        signature: 'list(): RemoteHostStatus[]',
+        description: 'Every configured host and its attachment lifecycle.',
+        parameters: [],
+        returns: 'stable-order status rows.',
+      },
+      {
+        signature: '@Remote describe(): RemoteHostsSnapshot',
+        description: 'Read connection settings and current states, including empty remote hosts.',
+        parameters: [],
+        returns: 'Current host rows and the revision needed for persistent edits.',
+      },
+      {
+        signature: '@Remote async setHosts(request: RemoteHostsUpdate): Promise<RemoteHostsSnapshot>',
+        description: 'Persist a revision-checked connection list and start newly configured connections. A connection failure keeps its configuration and is reported in its host row.',
+        parameters: [{ name: 'request', description: 'Complete connection list and its last observed revision.' }],
+        returns: 'Persisted connection settings and current attachment states.',
+        throws: ['{RemoteError} `remote-hosts/configuration-rejected` when validation or persistence fails; `remote-hosts/conflict` when another edit changed the configuration revision.'],
+      },
+      {
+        signature: '@Remote async reconnect(id: string): Promise<RemoteHostsSnapshot>',
+        description: 'Retry one configured connection immediately.',
+        parameters: [{ name: 'id', description: 'Configured host identity.' }],
+        returns: 'Current connection settings and attachment states.',
+        throws: ['{RemoteError} `remote-hosts/not-found` when the host was removed.'],
+      },
+      {
+        signature: '@Remote async disconnectHost(id: string): Promise<RemoteHostsSnapshot>',
+        description: 'Stop a connection and its automatic retries without deleting its settings.',
+        parameters: [{ name: 'id', description: 'Configured host identity.' }],
+        returns: 'Current connection settings and attachment states.',
+        throws: ['{RemoteError} `remote-hosts/not-found` when the host was removed.'],
+      },
+      {
+        signature: 'connected(): readonly RemoteHostHandle[]',
+        description: 'Attached hosts, in configuration order.',
+        parameters: [],
+        returns: 'one handle per usable Remote connection.',
+      },
+      {
+        signature: 'connection(id: string): RemoteHostHandle',
+        description: 'Resolve a usable connection without silently selecting another Host.',
+        parameters: [{ name: 'id', description: 'Configured Host identity.' }],
+        returns: 'Current connection handle.',
+      },
+      {
+        signature: '@Remote workspaces(id: string, signal: AbortSignal): Promise<{ items: RemoteHostWorkspace[] }>',
+        description: 'Read the selected Host\'s Workspaces, closing the baseline stream afterwards.',
+        parameters: [{ name: 'id', description: 'Configured Host identity.' }, { name: 'signal', description: 'Cancel a superseded picker read.' }],
+        returns: 'Remote Workspaces in their saved order.',
+      },
+      {
+        signature: '@Remote createWorkspace(id: string, path: string): Promise<RemoteHostWorkspace>',
+        description: 'Add an existing directory to the selected Host\'s Workspace registry.',
+        parameters: [{ name: 'id', description: 'Configured Host identity.' }, { name: 'path', description: 'Absolute directory on that Host.' }],
+        returns: 'The remote Workspace.',
+      },
+      {
+        signature: 'async connect(id: string, signal?: AbortSignal): Promise<void>',
+        description: 'Attach one configured host, republishing a previous failure.',
+        parameters: [{ name: 'id', description: 'configured host identity.' }, { name: 'signal', description: 'caller cancellation.' }],
+      },
+      {
+        signature: 'async disconnect(id: string): Promise<void>',
+        description: 'Detach one configured host, keeping its configuration.',
+        parameters: [{ name: 'id', description: 'configured host identity.' }],
+      },
+    ],
+  },
+  {
     key: 'sandbox',
     summary: 'Abstract process-sandbox service.',
     description: 'Abstract process-sandbox service. confine must return enforcing argv or fail closed at wrap or runner-execution time; silent unconfined passthrough is forbidden. Functional probes arbitrate multi-runner chains and may be skipped for a sole candidate, whose own refusal remains the fail-closed end.',
@@ -2089,7 +2163,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'the created or reused Session identity and its preset when configured.',
       },
       {
-        signature: '@Remote(\'selectModel\') selectModel(request: SessionSelectModelRequest): Promise<SessionSelectModelValue>',
+        signature: '@Remote(\'selectModel\') async selectModel(request: SessionSelectModelRequest): Promise<SessionSelectModelValue>',
         description: 'Select one Session-local model after explicitly resuming the Session; save the default in the background.',
         parameters: [{ name: 'request', description: 'Session identity and requested model selection.' }],
         returns: 'the normalized selection installed for the Session, without waiting for default persistence.',
@@ -2133,7 +2207,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         throws: ['RemoteError when the path is invalid, the query is cancelled, or native discovery fails.'],
       },
       {
-        signature: '@Remote(\'rename\') rename(request: SessionRenameRequest): Promise<SessionRenameValue>',
+        signature: '@Remote(\'rename\') async rename(request: SessionRenameRequest): Promise<SessionRenameValue>',
         description: 'Rename one Session after explicitly resuming it.',
         parameters: [{ name: 'request', description: 'Session identity and proposed title.' }],
         returns: 'the accepted title and durable event sequence.',
@@ -2151,25 +2225,25 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'acknowledgement that the Agent accepted the prompt.',
       },
       {
-        signature: '@Remote(\'attachment\') attachment(request: SessionAttachmentRequest): Promise<SessionAttachmentValue>',
+        signature: '@Remote(\'attachment\') async attachment(request: SessionAttachmentRequest): Promise<SessionAttachmentValue>',
         description: 'Read one image proven reachable from the addressed Session log.',
         parameters: [{ name: 'request', description: 'Session and attachment identities used for authorization.' }],
         returns: 'the durable attachment reference and base64-encoded bytes.',
       },
       {
-        signature: '@Remote(\'updateQueue\') updateQueue(request: SessionUpdateQueueRequest): Promise<SessionUpdateQueueValue>',
+        signature: '@Remote(\'updateQueue\') async updateQueue(request: SessionUpdateQueueRequest): Promise<SessionUpdateQueueValue>',
         description: 'Mutate one still-pending queue occurrence, resuming a cold Agent first.',
         parameters: [{ name: 'request', description: 'Session, queue item, and requested mutation.' }],
         returns: 'acknowledgement that the queue mutation was applied.',
       },
       {
-        signature: '@Remote(\'cancel\') cancel(request: SessionCancelRequest): SessionCancelValue',
+        signature: '@Remote(\'cancel\') async cancel(request: SessionCancelRequest): Promise<SessionCancelValue>',
         description: 'Cancel one active Agent turn without dropping its pending inbox.',
         parameters: [{ name: 'request', description: 'Session whose active Agent turn is cancelled.' }],
         returns: 'acknowledgement that cancellation was requested.',
       },
       {
-        signature: '@Remote({ name: \'page\', resources: { session: addressedSession } }) page(request: SessionPageRequest, signal: AbortSignal): Promise<SessionPage>',
+        signature: '@Remote({ name: \'page\', resources: { session: addressedSession } }) async page(request: SessionPageRequest, signal: AbortSignal): Promise<SessionPage>',
         description: 'Read one cold-safe, message-aligned Session history page.',
         parameters: [{ name: 'request', description: 'durable address, backward cursor, and page budget.' }, { name: 'signal', description: 'cancellation for persistence reads.' }],
         returns: 'one chronological page.',
@@ -4126,6 +4200,14 @@ export const EVENT_API: readonly EventApiEntry[] = [
     parameters: [{ name: 'summary', description: 'current list row for the Session.' }],
   },
   {
+    name: 'api-session/catalog-changed',
+    mode: 'emit',
+    signature: '\'api-session/catalog-changed\'(): void',
+    summary: 'Session directory membership changed and clients must query a fresh list.',
+    description: 'Session directory membership changed and clients must query a fresh list.',
+    parameters: [],
+  },
+  {
     name: 'api-session/error',
     mode: 'emit',
     signature: '\'api-session/error\'(sessionId: SessionId, message: string): void',
@@ -4411,6 +4493,14 @@ export const EVENT_API: readonly EventApiEntry[] = [
     signature: '\'plugin-market/changed\'(): void',
     summary: 'The configured index sources changed.',
     description: 'The configured index sources changed.',
+    parameters: [],
+  },
+  {
+    name: 'remote-hosts/changed',
+    mode: 'emit',
+    signature: '\'remote-hosts/changed\'(): void',
+    summary: 'A configured host or its connection state changed.',
+    description: 'A configured host or its connection state changed.',
     parameters: [],
   },
   {
@@ -6746,6 +6836,34 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface RemoteEventHostInfo {\n    readonly home: string;\n}',
   },
   {
+    name: 'RemoteHostEntry',
+    declaration: 'export interface RemoteHostEntry {\n    readonly id: string;\n    readonly name?: string;\n    readonly sshTarget: string;\n    readonly sshPort?: number;\n    readonly remoteHome?: string;\n}',
+  },
+  {
+    name: 'RemoteHostHandle',
+    declaration: 'export interface RemoteHostHandle {\n    readonly id: string;\n    readonly name: string;\n    invoke(endpoint: string, args: object, signal?: AbortSignal): Promise<unknown>;\n    stream(endpoint: string, payload: unknown, signal?: AbortSignal): AsyncIterable<unknown>;\n}',
+  },
+  {
+    name: 'RemoteHostsSnapshot',
+    declaration: 'export interface RemoteHostsSnapshot {\n    readonly hosts: RemoteHostStatus[];\n    readonly writable: boolean;\n    readonly revision: number;\n}',
+  },
+  {
+    name: 'RemoteHostStatus',
+    declaration: 'export interface RemoteHostStatus extends RemoteHostEntry {\n    readonly id: string;\n    readonly name: string;\n    readonly status: RemoteHostStatusKind;\n    readonly error?: string;\n    readonly pid?: number;\n}',
+  },
+  {
+    name: 'RemoteHostStatusKind',
+    declaration: 'export type RemoteHostStatusKind = \'idle\' | \'connecting\' | \'connected\' | \'error\';',
+  },
+  {
+    name: 'RemoteHostsUpdate',
+    declaration: 'export interface RemoteHostsUpdate {\n    readonly hosts: RemoteHostEntry[];\n    readonly expectedRevision: number;\n}',
+  },
+  {
+    name: 'RemoteHostWorkspace',
+    declaration: 'export interface RemoteHostWorkspace {\n    readonly workspaceId: WorkspaceId;\n    readonly path: string;\n    readonly title: string;\n}',
+  },
+  {
     name: 'RemoteStream',
     declaration: 'export type RemoteStream<Out, In = never> = AsyncIterable<Out> & {\n    readonly [STREAM_UPLINK]?: In;\n};',
   },
@@ -7067,11 +7185,11 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'SessionCreateRequest',
-    declaration: 'export interface SessionCreateRequest {\n    readonly workspaceId?: WorkspaceId;\n    readonly cwd?: string;\n    readonly sessionId?: SessionId;\n    readonly agentPreset?: string;\n}',
+    declaration: 'export interface SessionCreateRequest {\n    readonly hostId?: string;\n    readonly workspaceId?: WorkspaceId;\n    readonly cwd?: string;\n    readonly sessionId?: SessionId;\n    readonly agentPreset?: string;\n}',
   },
   {
     name: 'SessionCreateValue',
-    declaration: 'export interface SessionCreateValue {\n    readonly sessionId: SessionId;\n    readonly agentPreset?: string;\n}',
+    declaration: 'export interface SessionCreateValue {\n    readonly host?: SessionHost;\n    readonly sessionId: SessionId;\n    readonly agentPreset?: string;\n}',
   },
   {
     name: 'SessionEndInput',
@@ -7212,6 +7330,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'SessionHistoryRecord',
     declaration: 'export type SessionHistoryRecord = SessionEventEntry;',
+  },
+  {
+    name: 'SessionHost',
+    declaration: 'export interface SessionHost {\n    readonly id: string;\n    readonly name: string;\n}',
   },
   {
     name: 'SessionId',
@@ -7463,7 +7585,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'SessionSummary',
-    declaration: 'export interface SessionSummary {\n    readonly agentAvailable: boolean;\n    readonly formatStatus?: \'current\' | \'migration-required\';\n    readonly sessionId: SessionId;\n    readonly updatedAt: number;\n    readonly running: boolean;\n    readonly blank: boolean;\n    readonly parentSessionId?: SessionId;\n    readonly origin?: \'subagent\';\n    readonly cwd?: string;\n    readonly projections?: SessionProjectionHints;\n}',
+    declaration: 'export interface SessionSummary {\n    readonly agentAvailable: boolean;\n    readonly formatStatus?: \'current\' | \'migration-required\';\n    readonly sessionId: SessionId;\n    readonly updatedAt: number;\n    readonly running: boolean;\n    readonly blank: boolean;\n    readonly parentSessionId?: SessionId;\n    readonly origin?: \'subagent\';\n    readonly cwd?: string;\n    readonly projections?: SessionProjectionHints;\n    readonly host?: SessionHost;\n}',
   },
   {
     name: 'SessionSurface',

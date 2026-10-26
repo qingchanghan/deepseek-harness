@@ -36,6 +36,8 @@ export interface SessionSummary {
   origin?: 'subagent'
   /** Format classification supplied by the Host list, when available. */
   formatStatus?: SessionListEntry['formatStatus']
+  /** Attached remote Host owning this Session; absent for a locally hosted Session. */
+  host?: SessionListEntry['host']
   /** Host running state for `ids` members; a display fallback for other rows. */
   running: boolean
   /** Local ownership counts; Host metadata refreshes cannot overwrite them. */
@@ -419,6 +421,9 @@ export class ClientSessions implements ISessions {
     this.manager.handleSessionError(...args)
   }
 
+  /** Query a fresh catalog after a directory invalidation, including during an existing read. */
+  invalidateList(): void { this.manager.invalidateList() }
+
   /** Rebuild the Session baseline and every opened window after connection. */
   handleConnected(): void {
     this.manager.handleConnected()
@@ -432,6 +437,7 @@ export class ClientSessions implements ISessions {
    * @throws {SessionCreateError} with the requested id.
    */
   async create(opts: {
+    hostId?: string
     workspaceId?: WorkspaceId
     cwd?: string
     sessionId?: SessionId
@@ -640,6 +646,7 @@ export class ClientSessions implements ISessions {
         ...(entry.cwd !== undefined ? { cwd: entry.cwd } : {}),
         ...(entry.parentSessionId !== undefined ? { parentId: entry.parentSessionId } : {}),
         ...(entry.origin !== undefined ? { origin: entry.origin } : {}),
+        ...(entry.host === undefined ? {} : { host: entry.host }),
       }
     }
     for (const [parentId, projection] of Object.entries(projectionsBySession)) {

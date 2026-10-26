@@ -27,6 +27,9 @@
       "path": "../../client/connection/tsconfig.host.json"
     },
     {
+      "path": "../../api/remote-hosts"
+    },
+    {
       "path": "../../host/frontend-static"
     },
     {

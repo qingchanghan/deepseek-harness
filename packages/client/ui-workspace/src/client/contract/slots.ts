@@ -115,6 +115,8 @@ export interface SessionRowScheduleOwnerProps {
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface SlotMap {
+    /** Remote host groups below the Local workspace tree; query filters their Session titles. */
+    'sidebar.workspaces.hosts': { kind: 'single'; scope: 'root'; owner: { query: string } }
     /** Directory-flow hole under the conversation empty-state picker (declared by the WorkspacePicker entry). */
     'conversation.hero.workspace.directoryFlow': { kind: 'single'; scope: 'root'; owner: DirectoryFlowOwnerProps }
     /** Directory-flow hole under the sidebar browsing region (declared by the WorkspaceBrowser entry). */
@@ -219,6 +221,8 @@ export type DirectoryPickingHooks = PropsHooks<DirectoryPickingInjected['hooks']
  */
 export type WorkspaceBrowserInjected = {
   hooks: DirectoryPickingInjected['hooks'] & {
+    /** Whether the browser has a remote-host grouping contribution. */
+    hostGroups: HostObservable<boolean>
     /**
      * Fixed Host facts, reached through a hook rather than injected as values:
      * the renderer memoizes an entry's inject result for the registration's
@@ -468,6 +472,7 @@ export type RowToastProps =
 export type WorkspaceBrowserProps =
   PropsRuntime<'sidebar.workspaces'>
   & PropsRenderSlots<
+    | 'sidebar.workspaces.hosts'
     | 'sidebar.workspaces.directoryFlow'
     | 'sidebar.workspaces.session.menu.item'
     | 'sidebar.workspaces.session.row.action'

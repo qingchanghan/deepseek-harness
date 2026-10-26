@@ -86,6 +86,7 @@ export interface ISessions {
    * @returns the catalogued identity the Host created or reused; retain it before borrowing its binding.
    */
   create(opts?: {
+    hostId?: string
     workspaceId?: WorkspaceId
     cwd?: string
     sessionId?: SessionId

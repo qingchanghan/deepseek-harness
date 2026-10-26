@@ -1,7 +1,7 @@
 /** Host BFF entry and Loader shell for the Remote contribution assembly. */
 
 import { homedir } from 'node:os'
-import type { Context } from '@deepseek-ai/cordis'
+import { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type {
   TypertRemoteEventDispatch,
@@ -12,6 +12,8 @@ import type {
 import { Deque } from '@deepseek-ai/dsh-deque'
 import { carrierKeyOf } from '@deepseek-ai/dsh-scope'
 import { isJsonValue, type JsonValue } from '@deepseek-ai/dsh-util-values'
+import type { RemoteEventBridge } from '@deepseek-ai/dsh-api-gateway/types'
+import type {} from '@deepseek-ai/dsh-api-gateway/types'
 import { API_REMOTE_FORWARDED_EVENTS } from './remote-events.ts'
 
 // The owner packages' client-safe `./types` exports carry the cordis `Events`
@@ -38,16 +40,60 @@ export const inject = ['typertGateway']
 
 /** Host plugin body registering this application's selected Cordis event source. */
 export function apply(ctx: Context): void {
+  const queues = new Set<RemoteEventQueue>()
+  ctx.provide('remoteEventBridge', createRemoteEventBridge(queues))
   ctx.effect(
-    () => ctx.typertGateway.registerRemoteEvents(remoteEventSource(ctx), { home: homedir() }),
+    () => ctx.typertGateway.registerRemoteEvents(remoteEventSource(ctx, queues), { home: homedir() }),
     'api-remotes: forwarded Cordis event source',
   )
 }
 
+/**
+ * Build the bridge over the live Client event queues.
+ *
+ * A question is pushed into every answering generation at once; the first
+ * browser result settles it, and disposing the synthetic Agent Context removes
+ * the Gateway's pending delivery just as a closed Session would.
+ * @param queues - live forwarding queues, one per answering Client generation.
+ * @returns the bridge service value.
+ */
+function createRemoteEventBridge(queues: Set<RemoteEventQueue>): RemoteEventBridge {
+  return {
+    forward(event, agentId, request) {
+      if (queues.size === 0) {
+        return { outcome: Promise.resolve({ kind: 'next' }), cancel: () => {} }
+      }
+      const owner = new Context()
+      const subject = { id: agentId }
+      const settled = Promise.withResolvers<TypertRemoteEventOutcome>()
+      let done = false
+      const settle = (outcome: TypertRemoteEventOutcome): void => {
+        if (done) return
+        done = true
+        settled.resolve(outcome)
+        void owner.fiber.dispose()
+      }
+      const dispatch: TypertRemoteEventInvocation = {
+        event,
+        request: { ...request, agent: subject },
+        context: { value: owner, subject, agentId },
+        resolve: settle,
+        reject: () => { settle({ kind: 'next' }) },
+      }
+      for (const queue of queues) queue.push(dispatch)
+      return {
+        outcome: settled.promise,
+        cancel: () => { settle({ kind: 'next' }) },
+      }
+    },
+  }
+}
+
 /** Create the sole queue and listener set consumed by the registered Gateway. */
-function remoteEventSource(ctx: Context): TypertRemoteEventSource {
+function remoteEventSource(ctx: Context, queues: Set<RemoteEventQueue>): TypertRemoteEventSource {
   return (signal) => {
     const queue = new RemoteEventQueue()
+    queues.add(queue)
     const disposers = API_REMOTE_FORWARDED_EVENTS.map((entry) => {
       const { event, mode } = entry
       if (mode === 'emit') {
@@ -77,6 +123,7 @@ function remoteEventSource(ctx: Context): TypertRemoteEventSource {
       }) as never)
     })
     return queue.iterate(signal, () => {
+      queues.delete(queue)
       for (const dispose of disposers) dispose()
     })
   }

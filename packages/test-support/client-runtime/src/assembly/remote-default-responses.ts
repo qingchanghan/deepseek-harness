@@ -13,6 +13,8 @@ export const remoteDefaultResponses: RemoteTable = {
   unary: {
     // api-session-controller `sessions.handleConnected()` on `connection/reset`.
     'session/list': ok({ items: [] }),
+    // ui-remote-hosts reads saved connections for the sidebar at startup.
+    'remoteHosts/describe': ok({ hosts: [], writable: true, revision: 0 }),
     // ui-workspace startup with no entries; first-use initialization is ineligible.
     'workspace/initializeDefault': ok(undefined),
     // ui-settings `mirror.ensure()` at apply and again on `connection/reset`.

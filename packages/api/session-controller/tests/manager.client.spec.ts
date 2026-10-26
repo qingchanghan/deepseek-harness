@@ -50,6 +50,29 @@ function makeManager(
 }
 
 describe('SessionManager instances', () => {
+  it('refreshes again when remote-host membership changes during the initial catalog read', async ({ mock, remote }) => {
+    const manager = makeManager(mock, remote)
+    onTestFinished(() => manager.dispose())
+    const first = Promise.withResolvers<Awaited<ReturnType<typeof remote.session.list>>>()
+    remote.session.list.mockReset().mockReturnValueOnce(first.promise)
+      .mockResolvedValue(ok({ items: [summary(S1), summary(S2)] }))
+    const initial = manager.refreshList()
+    manager.invalidateList()
+    manager.invalidateList()
+    first.resolve(ok({ items: [summary(S1)] }))
+    await initial
+    await vi.waitFor(() =>{  expect(manager.getListSnapshot().items.map(row => row.sessionId)).toEqual([S1, S2]) })
+    expect(remote.session.list).toHaveBeenCalledTimes(2)
+  })
+
+  it('ignores a directory invalidation after disposal', async ({ mock, remote }) => {
+    const manager = makeManager(mock, remote)
+    await manager.dispose()
+    remote.session.list.mockClear()
+    manager.invalidateList()
+    expect(remote.session.list).not.toHaveBeenCalled()
+  })
+
   it.for(['event', 'list'] as const)(
     'forgets running when an unretained identity disappears through a %s',
     async (source, { mock, remote }) => {
@@ -1165,6 +1188,14 @@ describe('subagent catalogs', () => {
 })
 
 describe('remaining branches', () => {
+  it('creates on the requested Host and preserves its identity before the first list refresh', async ({ mock, remote }) => {
+    const manager = makeManager(mock, remote)
+    onTestFinished(() => manager.dispose())
+    remote.session.create.mockResolvedValue(ok({ sessionId: S1, host: { id: 'h20', name: 'H20' } }))
+    await manager.create({ hostId: 'h20', cwd: '/remote/project' })
+    expect(remote.session.create).toHaveBeenCalledExactlyOnceWith({ hostId: 'h20', cwd: '/remote/project' })
+    expect(manager.getListSnapshot().items[0]).toMatchObject({ sessionId: S1, host: { id: 'h20', name: 'H20' } })
+  })
   it('refreshList propagates a non-Remote throw', async ({ mock, remote }) => {
     remote.session.list.mockRejectedValue(new Error('list wire down'))
     const manager = makeManager(mock, remote)

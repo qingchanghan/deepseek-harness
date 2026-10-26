@@ -29,6 +29,8 @@ export interface SessionListEntry {
   origin?: 'subagent'
   /** Format classification supplied by the Host list. */
   formatStatus?: SessionSummary['formatStatus']
+  /** Attached remote Host owning this Session; absent for a locally hosted Session. */
+  host?: SessionSummary['host']
   cwd?: string
   /** Current host-computed projection values for list consumers. */
   projectionValues?: Readonly<Partial<SessionProjectionMap>>

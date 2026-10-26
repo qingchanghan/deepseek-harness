@@ -108,6 +108,14 @@ const GROUP_ORDER = [
 
 const SERVICE_ROLES: ServiceRole[] = [
   {
+    key: 'remoteHosts',
+    pkg: 'api-remote-hosts',
+    title: 'SSH remote Host connections',
+    mode: 'core',
+    consumers: ['api-session-controller'],
+    note: 'Owns discovery, tunnels, remote API clients, connection settings, and forwarded Session events.',
+  },
+  {
     key: 'cotTranslation',
     pkg: 'experimental-client-ui-cot-translation',
     title: 'Reasoning translation Remote',

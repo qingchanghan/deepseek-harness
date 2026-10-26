@@ -188,3 +188,36 @@ declare module '@deepseek-ai/cordis' {
     typertGateway: TypertGateway
   }
 }
+
+/** One pending forwarded waterfall and its cancellation handle. */
+export interface ForwardedRemoteEvent {
+  /** Settlement reported by the browser, or `next` when no browser could answer. */
+  readonly outcome: Promise<
+    { readonly kind: 'result'; readonly value?: unknown } | { readonly kind: 'next' }
+  >
+  /** Withdraw the local question, for example because the remote peer cancelled it. */
+  cancel(reason: unknown): void
+}
+
+/**
+ * Host service that lets another Host surface a remote waterfall in the local
+ * browser. The application event assembly provides it; a composition without
+ * that assembly keeps `ctx.get('remoteEventBridge')` undefined.
+ */
+export interface RemoteEventBridge {
+  /**
+   * Ask every answering browser to answer one forwarded waterfall.
+   * @param event - forwarded Cordis event name.
+   * @param agentId - identity the browser resolves to its Session scope.
+   * @param request - JSON request fields after the remote Host projected them.
+   * @returns the pending question and its cancellation handle.
+   */
+  forward(event: string, agentId: string, request: Readonly<Record<string, unknown>>): ForwardedRemoteEvent
+}
+
+declare module '@deepseek-ai/cordis' {
+  interface Context {
+    /** Cross-Host waterfall forwarding, when the application event assembly provides it. */
+    remoteEventBridge?: RemoteEventBridge
+  }
+}

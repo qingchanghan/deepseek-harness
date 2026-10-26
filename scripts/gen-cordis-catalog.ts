@@ -50,6 +50,7 @@ export { REGION_BEGIN, REGION_END }
  * errors, so the partition can never silently drift from the service API.
  */
 export const SERVICE_PAGE: Record<string, string> = {
+  remoteHosts: 'web-server.md',
   translator: 'translation.md',
   cotTranslation: 'translation.md',
   speechToText: 'voice-input.md',
@@ -170,6 +171,7 @@ export const SERVICE_PAGE: Record<string, string> = {
  * to a model as `cordis_runtime_inspect what:"client"`).
  */
 export const SERVICE_WALK_EXEMPTIONS: Record<string, string> = {
+  remoteEventBridge: 'Forwarded waterfall ownership is documented in packages/api/remote-hosts/README.md',
   invocation: 'not a service: per-call accessor (RemoteInvocation | undefined) the Gateway derives for each Remote call — packages/api/gateway/README.md owns the contract',
   webTerminals: 'client-side terminal view models — packages/api/terminal-controller/README.md owns the API',
   appReady: 'not a service: launcher-provided successful-startup signal — packages/boot/cmdline/README.md owns the launcher contract',
@@ -219,6 +221,7 @@ export const SERVICE_WALK_EXEMPTIONS: Record<string, string> = {
  * {@link EVENT_WALK_EXEMPTIONS} names each one with its documentation owner.
  */
 export const EVENT_SCOPE_PAGE: Record<string, string> = {
+  'remote-hosts': 'web-server.md',
   'app-boot': 'boot.md',
   hmr: 'boot.md',
   'plugin-manager': 'boot.md',
@@ -266,6 +269,7 @@ export const EVENT_SCOPE_PAGE: Record<string, string> = {
  * exemption cannot mask another declaration in that scope.
  */
 export const EVENT_WALK_EXEMPTIONS: Record<string, string> = {
+  'ui-workspace/new-session': 'client-face destination selection — packages/client/ui-workspace/README.md owns the API',
   'command/executed': 'client-face local command acknowledgment — packages/client/ui-commands/README.md owns the API',
   'connection/reset': 'client-face transport signal — packages/api/session-controller/README.md owns the API',
   'locale/change': 'client-face locale switch signal — packages/client/locale/README.md owns the API',
@@ -870,6 +874,11 @@ export const FOUNDATION_TYPE_NAMES: ReadonlySet<string> = new Set([
 
 /** Project types deliberately documented outside the subsystems catalog. */
 export const TYPE_LINK_EXEMPTIONS: Readonly<Record<string, string>> = {
+  RemoteHostStatus: 'SSH connection fields and states are owned by packages/api/remote-hosts/README.md',
+  RemoteHostsSnapshot: 'connection management reads are owned by packages/api/remote-hosts/README.md',
+  RemoteHostsUpdate: 'revision-checked connection edits are owned by packages/api/remote-hosts/README.md',
+  RemoteHostWorkspace: 'remote Workspace choices are owned by packages/api/remote-hosts/README.md',
+  RemoteHostHandle: 'attached Host invocation and stream handles are owned by packages/api/remote-hosts/README.md',
   ProductEvent: 'Desktop event fields are owned by packages/client/product-analytics/README.md and src/events.ts',
   ConnectionFetchHandler: 'shared Fetch dispatch is owned by packages/client/connection/src/rpc.ts',
   ConnectionRequestRejection: 'transport rejection status is owned by packages/client/connection/src/rpc.ts',

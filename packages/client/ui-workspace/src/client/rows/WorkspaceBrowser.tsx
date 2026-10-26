@@ -914,6 +914,7 @@ export function WorkspaceBrowser({
   searchSessions,
   searchResultLimit,
   useDirectoryFlow,
+  useHostGroups,
   useHostInfo,
   useShortcuts,
   useWorkspaceShortcuts,
@@ -949,6 +950,7 @@ export function WorkspaceBrowser({
   // Live occupancy of this surface's directory-flow hole (the same source the
   // flow reads): a composition without a picking affordance can add nothing.
   const directoryFlowAvailable = useDirectoryFlow(occupied => occupied)
+  const hostGroupsAvailable = useHostGroups(occupied => occupied)
   const groupBy = useStore(s => s.groupBy)
   const orderBy = useStore(s => s.orderBy)
   // Persisted view blobs written before the archived filter existed rehydrate
@@ -1263,6 +1265,83 @@ export function WorkspaceBrowser({
     })
   }
 
+  const localContent = wide && (normalizedQuery !== ''
+    ? (
+      <SearchResults
+        usePanelInfo={usePanelInfo}
+        useSessions={useSessions}
+        useSessionStatus={useSessionStatus}
+        open={openSearchResult}
+        onUnarchive={onSessionUnarchive}
+        workspaces={workspaces}
+        archivedSessionIds={archivedSessionIds}
+        archivedFilter={archivedFilter}
+        query={normalizedQuery}
+        remote={remoteSearch}
+        resultLimit={searchResultLimit}
+        t={t}
+      />
+    )
+    : groupBy === 'flat'
+      ? (
+        <FlatList
+          usePanelInfo={usePanelInfo}
+          list={list}
+          sessionIds={orderedFlatSessionIds}
+          rowState={rowState}
+          onLeaveArchivedOnly={leaveArchivedOnly}
+          workspaceReady={workspaceReady}
+          animationResetKey={`${groupBy}/${orderBy}/${archivedFilter}`}
+          useSessionStatus={useSessionStatus}
+          open={guardedOpen}
+          onSessionRenameRequest={requestSessionRename}
+          renderSlot={renderSlot}
+          setSessionOrder={saveSessionOrder}
+          revealSessionId={revealSessionId}
+          onSessionRevealed={acknowledgeSessionReveal}
+          t={t}
+        />
+      )
+      : (
+        <SessionTree
+          usePanelInfo={usePanelInfo}
+          list={list}
+          shortcuts={shortcuts}
+          useSessionStatus={useSessionStatus}
+          onSessionRenameRequest={requestSessionRename}
+          renderSlot={renderSlot}
+          workspaces={orderedWorkspaces}
+          ungroupedSessionIds={orderedUngroupedSessionIds}
+          workspaceReady={workspaceReady}
+          nestWorkspaces={groupBy === 'workspace-tree'}
+          animationResetKey={`${groupBy}/${orderBy}/${archivedFilter}`}
+          groupExpansion={groupExpansion}
+          setGroupExpanded={actions.setGroupExpanded}
+          setSessionOrder={saveSessionOrder}
+          rowState={rowState}
+          onLeaveArchivedOnly={leaveArchivedOnly}
+          startSession={startSession}
+          open={guardedOpen}
+          insertWorkspaceBefore={insertWorkspaceBefore}
+          revealSessionId={revealSessionId}
+          onSessionRevealed={acknowledgeSessionReveal}
+          home={home}
+          t={t}
+          onRenameRequest={(workspaceId, displayTitle) => {
+            setRenameTarget({
+              workspaceId,
+              storedTitle: storedWorkspaces.find(w => w.workspaceId === workspaceId)?.title ?? displayTitle,
+            })
+            setRenameDraft(displayTitle)
+            setRenameError(null)
+          }}
+          onDeleteRequest={(workspaceId, title) => {
+            setDeleteTarget({ workspaceId, title })
+            setDeleteError(null)
+          }}
+        />
+      ))
+
   return (
     <div className={clsx(css.root, !wide && css.rail)}>
       <div className={css.sectionHeader}>
@@ -1399,83 +1478,19 @@ export function WorkspaceBrowser({
 
       {/* Always-mounted seat keeps the region's flex slot while the list
           itself is wide-only. */}
-      <div className={css.listArea}>
-        {wide && (normalizedQuery !== ''
-          ? (
-            <SearchResults
-              usePanelInfo={usePanelInfo}
-              useSessions={useSessions}
-              useSessionStatus={useSessionStatus}
-              open={openSearchResult}
-              onUnarchive={onSessionUnarchive}
-              workspaces={workspaces}
-              archivedSessionIds={archivedSessionIds}
-              archivedFilter={archivedFilter}
-              query={normalizedQuery}
-              remote={remoteSearch}
-              resultLimit={searchResultLimit}
-              t={t}
-            />
-          )
-          : groupBy === 'flat'
-            ? (
-              <FlatList
-                usePanelInfo={usePanelInfo}
-                list={list}
-                sessionIds={orderedFlatSessionIds}
-                rowState={rowState}
-                onLeaveArchivedOnly={leaveArchivedOnly}
-                workspaceReady={workspaceReady}
-                animationResetKey={`${groupBy}/${orderBy}/${archivedFilter}`}
-                useSessionStatus={useSessionStatus}
-                open={guardedOpen}
-                onSessionRenameRequest={requestSessionRename}
-                renderSlot={renderSlot}
-                setSessionOrder={saveSessionOrder}
-                revealSessionId={revealSessionId}
-                onSessionRevealed={acknowledgeSessionReveal}
-                t={t}
-              />
-            )
-            : (
-              <SessionTree
-                usePanelInfo={usePanelInfo}
-                list={list}
-                shortcuts={shortcuts}
-                useSessionStatus={useSessionStatus}
-                onSessionRenameRequest={requestSessionRename}
-                renderSlot={renderSlot}
-                workspaces={orderedWorkspaces}
-                ungroupedSessionIds={orderedUngroupedSessionIds}
-                workspaceReady={workspaceReady}
-                nestWorkspaces={groupBy === 'workspace-tree'}
-                animationResetKey={`${groupBy}/${orderBy}/${archivedFilter}`}
-                groupExpansion={groupExpansion}
-                setGroupExpanded={actions.setGroupExpanded}
-                setSessionOrder={saveSessionOrder}
-                rowState={rowState}
-                onLeaveArchivedOnly={leaveArchivedOnly}
-                startSession={startSession}
-                open={guardedOpen}
-                insertWorkspaceBefore={insertWorkspaceBefore}
-                revealSessionId={revealSessionId}
-                onSessionRevealed={acknowledgeSessionReveal}
-                home={home}
-                t={t}
-                onRenameRequest={(workspaceId, displayTitle) => {
-                  setRenameTarget({
-                    workspaceId,
-                    storedTitle: storedWorkspaces.find(w => w.workspaceId === workspaceId)?.title ?? displayTitle,
-                  })
-                  setRenameDraft(displayTitle)
-                  setRenameError(null)
-                }}
-                onDeleteRequest={(workspaceId, title) => {
-                  setDeleteTarget({ workspaceId, title })
-                  setDeleteError(null)
-                }}
-              />
-            ))}
+      <div
+        className={clsx(css.listArea, wide && hostGroupsAvailable && css.hostGroups)}
+        data-workspace-hosts={wide && hostGroupsAvailable ? true : undefined}
+      >
+        {wide && hostGroupsAvailable
+          ? <>
+            <details open className={css.localHost}>
+              <summary className={css.hostHeading}>{t('host.local')}</summary>
+              {localContent}
+            </details>
+            {renderSlot('sidebar.workspaces.hosts', { query: normalizedQuery })}
+          </>
+          : localContent}
       </div>
 
       <Modal

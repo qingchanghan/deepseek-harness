@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Hosts",
+    "description": "Group local Sessions and Sessions on SSH development machines by host."
+  }
+}

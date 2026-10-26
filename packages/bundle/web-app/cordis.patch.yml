@@ -71,6 +71,20 @@
       config:
         maxNoteBytes: 8192
 
+    # Hosts panel: local Sessions and SSH-attached remote Sessions grouped by
+    # the machine hosting them.
+    - id: ui-remote-hosts
+      name: '@deepseek-ai/dsh-client-ui-remote-hosts'
+
+    # SSH-attached remote dsh processes. Attaching reads the instance a remote
+    # `dsh web` published, forwards its loopback listener, and merges that
+    # Host's Sessions into this catalog with its configured display name. No
+    # host attaches until one is listed here.
+    - id: remote-hosts
+      name: '@deepseek-ai/dsh-api-remote-hosts'
+      config:
+        hosts: []
+
     # Browser Session export: `/export` command plus the shared download dialog.
     - id: session-log-download
       name: '@deepseek-ai/dsh-session-log-export'

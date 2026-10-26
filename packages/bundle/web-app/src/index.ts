@@ -25,6 +25,11 @@ import { launchedThroughSsh, launchEnvironmentOf } from '@deepseek-ai/dsh-launch
 import { scrubbedParentEnv } from '@deepseek-ai/dsh-subprocess'
 import type {} from '@deepseek-ai/cordis-plugin-loader'
 import type {} from '@deepseek-ai/dsh-shell-env'
+import {
+  removeWebInstance,
+  webInstanceDescriptor,
+  writeWebInstance,
+} from '@deepseek-ai/dsh-api-remote-hosts/instance-descriptor'
 import { parsePublicUrl } from './public-url.ts'
 
 /** The Web GUI this process serves, provided by the `web-runtime` row. */
@@ -70,6 +75,13 @@ export interface Config {
    * Absent or YAML `null` advertises the bind-address URL.
    */
   publicUrl?: string
+  /**
+   * Record this process below `$DSH_HOME/web-instances/<pid>.json` so an SSH
+   * peer can reach the listener and its launch token without reading the
+   * terminal. The descriptor is owner-readable and owner-writable only; turn
+   * this off where persisting the token to disk is not acceptable.
+   */
+  announceInstance: boolean
 }
 
 export const Config: z<Config> = z.object({
@@ -77,6 +89,7 @@ export const Config: z<Config> = z.object({
   printUrl: z.boolean().default(true),
   surfaceContext: z.boolean().default(true),
   publicUrl: z.transform(z.string(), value => parsePublicUrl(value).href),
+  announceInstance: z.boolean().default(true),
 })
 
 /** Environment variable naming the advertised URL of this Web GUI. */
@@ -178,6 +191,45 @@ export const internals: {
 } = { resolveDistIndex, openBrowser }
 
 /**
+ * Publish this process as an attachable instance once the listener is serving.
+ *
+ * Publication is best-effort: a home without a writable descriptor directory
+ * only costs SSH attachment, so the failure is reported and serving continues.
+ * The descriptor is removed when the owning fiber unloads; a write that
+ * settles after disposal is removed rather than left behind.
+ * @param ctx - connection-owning context carrying the ready listener.
+ * @param authenticatedUrl - advertised root including this process's launch token.
+ */
+function publishInstance(ctx: Context, authenticatedUrl: string): void {
+  const homePath = ctx.get('dshHomePath')
+  if (homePath === undefined) return
+  const home = homePath()
+  // Readiness publishes only after the listener bound; an absent port means
+  // this process never reached that point and has nothing to announce.
+  const port = ctx.webServer.port
+  if (port === undefined) return
+  const descriptor = webInstanceDescriptor({
+    protocol: ctx.webServer.protocol,
+    host: ctx.webServer.host,
+    port,
+    url: authenticatedUrl,
+    home,
+  })
+  ctx.effect(() => {
+    const written = writeWebInstance(home, descriptor).catch((error: unknown) => {
+      const reason = error instanceof Error ? error.message : String(error)
+      console.warn(`dsh web: could not publish the instance descriptor because ${reason}; SSH attachment still needs the printed URL`)
+    })
+    return async () => {
+      await written
+      await removeWebInstance(home, descriptor.pid).catch(() => {
+        // Removal is best-effort; a reader also treats a dead pid as stale.
+      })
+    }
+  }, 'web-app: instance descriptor')
+}
+
+/**
  * Mount the Web runtime: dist serving, the bash runtime variable, the URL
  * line, and the default-browser handoff.
  * @param ctx - plugin context carrying the webServer service.
@@ -215,7 +267,7 @@ export function apply(ctx: Context, config: Config): void {
       })
     })
   }
-  if (config.printUrl || handoffBrowser) {
+  if (config.printUrl || handoffBrowser || config.announceInstance) {
     ctx.inject(['connection'], (connectionCtx) => {
       // The URL line and browser handoff are readiness signals: supervisors RPC
       // as soon as they observe the line, while a browser requests the page as
@@ -237,6 +289,7 @@ export function apply(ctx: Context, config: Config): void {
             console.error(`web-app: could not open the default browser because ${reason}; use the dsh web URL printed at startup`)
           })
         }
+        if (config.announceInstance) publishInstance(connectionCtx, authenticatedUrl)
       }
       // This row's own activation can precede a sibling failure. The app owns
       // readiness by waiting for its Loader tree, or announces at once in a

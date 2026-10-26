@@ -214,13 +214,52 @@ export interface Config {
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-api-job-controller -->
 
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-api-remote-hosts -->
+<a id="deepseek-aidsh-api-remote-hosts"></a>
+
+## `@deepseek-ai/dsh-api-remote-hosts`
+
+- `refs`: `Volatile` (`@deepseek-ai/cordis`)
+- `source`: [`packages/api/remote-hosts/src/index.ts:47`](../packages/api/remote-hosts/src/index.ts)
+
+```ts config-catalog
+/** Remote Hosts deployment configuration. */
+export interface Config {
+  /** SSH development machines this Host may attach to. */
+  readonly hosts: Volatile<RemoteHostEntry[]>
+  /** Deadline for one SSH command, HTTP request, or handshake, in milliseconds. */
+  readonly timeoutMs: number
+  /** Attach every configured host while this plugin activates. */
+  readonly connectOnStart: boolean
+  /** First delay before retrying a failed attachment, in milliseconds. */
+  readonly retryDelayMs: number
+  /** Upper bound for the doubled retry delay, in milliseconds. */
+  readonly maxRetryDelayMs: number
+}
+
+/** One SSH development machine this Host may attach to. */
+export interface RemoteHostEntry {
+  /** Stable identity used by routing and displayed grouping. */
+  readonly id: string
+  /** Display name, for example `H20-141-sy`; defaults to {@link id}. */
+  readonly name?: string
+  /** OpenSSH host alias, `user@host`, or host name. */
+  readonly sshTarget: string
+  /** OpenSSH port; omitted uses the client's own SSH configuration. */
+  readonly sshPort?: number
+  /** Remote Harness home; omitted resolves `$DSH_HOME` then `~/.dsh` remotely. */
+  readonly remoteHome?: string
+}
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-api-remote-hosts -->
+
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-api-session-controller -->
 <a id="deepseek-aidsh-api-session-controller"></a>
 
 ## `@deepseek-ai/dsh-api-session-controller`
 
 - `inject`: `agentDefaultModel` · `agents` · `attachments` · `fileUploads` · `fs` · `llm` · `remoteAccess` · `sessions` · `sessionProjections` · `sessionQuery` · `typert` · `workspaceRegistry`
-- `source`: [`packages/api/session-controller/src/index.ts:94`](../packages/api/session-controller/src/index.ts)
+- `source`: [`packages/api/session-controller/src/index.ts:95`](../packages/api/session-controller/src/index.ts)
 
 ```ts config-catalog
 /** Session Controller deployment policy. */
@@ -4333,7 +4372,7 @@ export interface WebRuntimeConfig {
 ## `@deepseek-ai/dsh-web-app`
 
 - `inject`: `webServer`
-- `source`: [`packages/bundle/web-app/src/index.ts:55`](../packages/bundle/web-app/src/index.ts)
+- `source`: [`packages/bundle/web-app/src/index.ts:60`](../packages/bundle/web-app/src/index.ts)
 
 ```ts config-catalog
 /** Plugin config: composed deployment settings plus per-invocation command-line values. */
@@ -4355,6 +4394,13 @@ export interface Config {
    * Absent or YAML `null` advertises the bind-address URL.
    */
   publicUrl?: string
+  /**
+   * Record this process below `$DSH_HOME/web-instances/<pid>.json` so an SSH
+   * peer can reach the listener and its launch token without reading the
+   * terminal. The descriptor is owner-readable and owner-writable only; turn
+   * this off where persisting the token to disk is not acceptable.
+   */
+  announceInstance: boolean
 }
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-web-app -->
@@ -4624,6 +4670,7 @@ These load from a `cordis.yml` entry with no `config:` block; they declare no co
 | `@deepseek-ai/dsh-client-ui-plan` | — | [`packages/client/ui-plan/src/index.ts`](../packages/client/ui-plan/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-plugin-market` | — | [`packages/client/ui-plugin-market/src/index.ts`](../packages/client/ui-plugin-market/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-reference` | — | [`packages/client/ui-reference/src/index.ts`](../packages/client/ui-reference/src/index.ts) |
+| `@deepseek-ai/dsh-client-ui-remote-hosts` | — | [`packages/client/ui-remote-hosts/src/index.ts`](../packages/client/ui-remote-hosts/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-renderer` | — | [`packages/client/ui-renderer/src/index.ts`](../packages/client/ui-renderer/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-schedule` | — | [`packages/client/ui-schedule/src/index.ts`](../packages/client/ui-schedule/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-secret-mask` | — | [`packages/client/ui-secret-mask/src/index.ts`](../packages/client/ui-secret-mask/src/index.ts) |

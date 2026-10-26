@@ -25,6 +25,8 @@ Desktop product events use the optional [product analytics service](../product-a
 
 -----
 
+A remote blank Session uses its Host annotation and working directory to identify the destination and enable its composer. Its Workspace need not appear in the Local registry; selecting the destination chip opens the new-conversation destination flow.
+
 <a id="conversation-assembly"></a>
 ## Conversation assembly
 

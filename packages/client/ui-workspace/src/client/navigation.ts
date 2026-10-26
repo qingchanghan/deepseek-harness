@@ -132,6 +132,14 @@ export interface UiWorkspace {
 }
 
 declare module '@deepseek-ai/cordis' {
+  interface Events {
+    /**
+     * Offer an unscoped New Session gesture to a composed destination picker.
+     * @mode bail
+     * @returns true when a picker owns the gesture; otherwise Local navigation continues.
+     */
+    'ui-workspace/new-session'(): boolean | void
+  }
   interface Context {
     /** Cross-Controller Workspace navigation and directory UI capability. */
     uiWorkspace: UiWorkspace
@@ -318,6 +326,7 @@ class UiWorkspaceService extends Service implements UiWorkspace {
   }
 
   startSession(workspaceId?: WorkspaceId, options?: StartSessionOptions): void {
+    if (workspaceId === undefined && options === undefined && this.ctx.bail('ui-workspace/new-session') === true) return
     const { agentPreset, ...draft } = options ?? {}
     const draftOptions = options === undefined ? undefined : draft
     const initializeDraft = draftOptions !== undefined

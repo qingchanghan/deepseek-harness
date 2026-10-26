@@ -109,6 +109,7 @@
     "apps/web/tests/account-login.e2e.ts",
     "apps/web/tests/onboarding-usable-provider.e2e.ts",
     "apps/web/tests/remote-settings.e2e.ts",
+    "apps/web/tests/remote-hosts.e2e.ts",
     "apps/web/tests/public-mount.e2e.ts",
     "apps/web/tests/workspace-new-session-folding.e2e.ts",
     "apps/web/tests/workspace-management.e2e.ts",
@@ -281,6 +282,7 @@
     { "path": "./packages/document/office-to-pdf" },
 
     { "path": "./packages/api/account-controller" },
+    { "path": "./packages/api/remote-hosts" },
     { "path": "./packages/credentials/deepseek-account-platform" },
     { "path": "./packages/credentials/deepseek-account" },
     { "path": "./packages/client/ui-deliverables/tsconfig.host.json" },

@@ -59,6 +59,7 @@ type FeedRow = {
   origin?: 'subagent'
   running?: boolean
   blank?: boolean
+  host?: { id: string; name: string }
   projections?: import('../src/types.ts').SessionProjectionValues
 }
 
@@ -67,6 +68,7 @@ async function feedList(b: Bench, rows: FeedRow[]): Promise<void> {
     items: rows.map(r => ({ agentAvailable: true,
       sessionId: sid(r.id), updatedAt: 1, running: r.running ?? false, blank: r.blank ?? false,
       ...(r.cwd !== undefined ? { cwd: r.cwd } : {}),
+      ...(r.host === undefined ? {} : { host: r.host }),
       ...(r.parentId !== undefined ? { parentSessionId: sid(r.parentId) } : {}),
       ...(r.origin !== undefined ? { origin: r.origin } : {}),
       ...(r.projections === undefined
@@ -79,6 +81,16 @@ async function feedList(b: Bench, rows: FeedRow[]): Promise<void> {
 }
 
 describe('list store projection', () => {
+  it('preserves remote Host labels and updates their ownership across catalog refreshes', async ({ bench }) => {
+    const b = bench()
+    await feedList(b, [{ id: 'remote', host: { id: 'h20', name: 'H20' } }])
+    expect(b.svc.list.getSnapshot().byId[sid('remote')]?.host).toEqual({ id: 'h20', name: 'H20' })
+    await feedList(b, [{ id: 'remote', host: { id: 'h20', name: 'Development machine' } }])
+    expect(b.svc.list.getSnapshot().byId[sid('remote')]?.host).toEqual({ id: 'h20', name: 'Development machine' })
+    await feedList(b, [{ id: 'remote' }])
+    expect(b.svc.list.getSnapshot().byId[sid('remote')]?.host).toBeUndefined()
+  })
+
   it('publishes format-status changes and preserves a newer update over an in-flight list', async ({ bench }) => {
     const b = bench()
     const historical = {

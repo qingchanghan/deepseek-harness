@@ -32,6 +32,7 @@ import { installModelSelectionProjection } from './model-selection-projection.ts
 import { SessionSkillCatalog } from './skill-catalog.ts'
 import { SessionMediaReferences } from './media-references.ts'
 import { ArchivedSessionGate } from './archived-session-gate.ts'
+import { RemoteSessionDirectory } from './remote-hosts.ts'
 import type {
   ModelCatalog,
   SessionWorkspacePathApplication,
@@ -142,6 +143,7 @@ export class SessionController extends TypertRemoteService {
   private readonly controlState: SessionControlController
   private readonly history: SessionHistoryController
   private readonly listState: ApiSessionList
+  private readonly remoteSessions: RemoteSessionDirectory
   private readonly openPath: (path: string, signal: AbortSignal) => Promise<void>
   private readonly fileApplications: typeof nativeFileApplications
   private readonly openFileApplication: typeof openNativeFileApplication
@@ -156,6 +158,8 @@ export class SessionController extends TypertRemoteService {
    */
   constructor(ctx: Context, config: Config, internals: SessionControllerInternals = {}) {
     super(ctx, 'sessionController', { namespace: 'session' })
+    this.remoteSessions = new RemoteSessionDirectory(ctx)
+    ctx.on('remote-hosts/changed', () => { ctx.emit('api-session/catalog-changed') })
     ctx.typert.resources.register('session', { field: 'sessionId' })
     const resolved = SessionController.Config(config)
     installModelSelectionProjection(ctx)
@@ -275,7 +279,8 @@ export class SessionController extends TypertRemoteService {
   @Remote('list')
   async list(_request: SessionListRequest, signal: AbortSignal): Promise<SessionListValue> {
     const items = await this.listState.list(signal)
-    return { items: items.filter(item => this.ctx.remoteAccess.allows({ kind: 'session', id: item.sessionId })) }
+    const merged = await this.remoteSessions.merge(items, signal)
+    return { items: merged.filter(item => this.ctx.remoteAccess.allows({ kind: 'session', id: item.sessionId })) }
   }
 
   /**
@@ -299,6 +304,7 @@ export class SessionController extends TypertRemoteService {
    */
   @Remote('create')
   create(request: SessionCreateRequest): Promise<SessionCreateValue> {
+    if (request.hostId !== undefined) return this.remoteSessions.create(request)
     return this.commands.create(request)
   }
 
@@ -308,7 +314,9 @@ export class SessionController extends TypertRemoteService {
    * @returns the normalized selection installed for the Session, without waiting for default persistence.
    */
   @Remote('selectModel')
-  selectModel(request: SessionSelectModelRequest): Promise<SessionSelectModelValue> {
+  async selectModel(request: SessionSelectModelRequest): Promise<SessionSelectModelValue> {
+    const host = this.remoteSessions.hostOf(request.sessionId)
+    if (host !== undefined) return this.remoteSessions.invoke<SessionSelectModelValue>(host, 'session/selectModel', request)
     return this.commands.selectModel(request)
   }
 
@@ -428,7 +436,9 @@ export class SessionController extends TypertRemoteService {
    * @returns the accepted title and durable event sequence.
    */
   @Remote('rename')
-  rename(request: SessionRenameRequest): Promise<SessionRenameValue> {
+  async rename(request: SessionRenameRequest): Promise<SessionRenameValue> {
+    const host = this.remoteSessions.hostOf(request.sessionId)
+    if (host !== undefined) return this.remoteSessions.invoke<SessionRenameValue>(host, 'session/rename', request)
     return this.commands.rename(request)
   }
 
@@ -441,6 +451,8 @@ export class SessionController extends TypertRemoteService {
    */
   @Remote('fork')
   async fork(request: SessionForkRequest): Promise<SessionForkValue> {
+    const remote = this.remoteSessions.hostOf(request.sessionId)
+    if (remote !== undefined) return this.remoteSessions.invoke<SessionForkValue>(remote, 'session/fork', request)
     if (request.allowMigration === false && this.ctx.sessions.get(request.sessionId) === undefined) {
       const stored = await this.ctx.get('sessionPersistence')?.stat(request.sessionId)
       if (stored?.formatStatus === 'migration-required' && this.ctx.sessions.get(request.sessionId) === undefined) {
@@ -461,6 +473,10 @@ export class SessionController extends TypertRemoteService {
   @Remote('prompt')
   async prompt(request: SessionPromptRequest, signal: AbortSignal): Promise<SessionPromptValue> {
     signal.throwIfAborted()
+    const remote = this.remoteSessions.hostOf(request.sessionId)
+    if (remote !== undefined) {
+      return this.remoteSessions.invoke<SessionPromptValue>(remote, 'session/prompt', request, signal)
+    }
     if (!hasPromptContent(request.content)) {
       throw new RemoteError('gateway/bad-request', 'prompt content must include non-whitespace text or an attachment', {})
     }
@@ -491,7 +507,9 @@ export class SessionController extends TypertRemoteService {
    * @returns the durable attachment reference and base64-encoded bytes.
    */
   @Remote('attachment')
-  attachment(request: SessionAttachmentRequest): Promise<SessionAttachmentValue> {
+  async attachment(request: SessionAttachmentRequest): Promise<SessionAttachmentValue> {
+    const host = this.remoteSessions.hostOf(request.sessionId)
+    if (host !== undefined) return this.remoteSessions.invoke<SessionAttachmentValue>(host, 'session/attachment', request)
     return this.commands.attachment(request)
   }
 
@@ -501,7 +519,9 @@ export class SessionController extends TypertRemoteService {
    * @returns acknowledgement that the queue mutation was applied.
    */
   @Remote('updateQueue')
-  updateQueue(request: SessionUpdateQueueRequest): Promise<SessionUpdateQueueValue> {
+  async updateQueue(request: SessionUpdateQueueRequest): Promise<SessionUpdateQueueValue> {
+    const host = this.remoteSessions.hostOf(request.sessionId)
+    if (host !== undefined) return this.remoteSessions.invoke<SessionUpdateQueueValue>(host, 'session/updateQueue', request)
     return this.commands.updateQueue(request)
   }
 
@@ -511,7 +531,9 @@ export class SessionController extends TypertRemoteService {
    * @returns acknowledgement that cancellation was requested.
    */
   @Remote('cancel')
-  cancel(request: SessionCancelRequest): SessionCancelValue {
+  async cancel(request: SessionCancelRequest): Promise<SessionCancelValue> {
+    const host = this.remoteSessions.hostOf(request.sessionId)
+    if (host !== undefined) return this.remoteSessions.invoke<SessionCancelValue>(host, 'session/cancel', request)
     return this.commands.cancel(request)
   }
 
@@ -522,7 +544,11 @@ export class SessionController extends TypertRemoteService {
    * @returns one chronological page.
    */
   @Remote({ name: 'page', resources: { session: addressedSession } })
-  page(request: SessionPageRequest, signal: AbortSignal): Promise<SessionPage> {
+  async page(request: SessionPageRequest, signal: AbortSignal): Promise<SessionPage> {
+    const host = this.remoteSessions.hostOf(addressedSession(request))
+    if (host !== undefined) {
+      return this.remoteSessions.invoke<SessionPage>(host, 'session/page', request, signal)
+    }
     return this.history.page(request, signal)
   }
 
@@ -535,6 +561,10 @@ export class SessionController extends TypertRemoteService {
    */
   @Remote({ mode: 'stream', resources: { session: addressedSession } })
   follow(request: SessionFollowRequest, signal: AbortSignal): AsyncIterable<SessionFollowFrame> {
+    const host = this.remoteSessions.hostOf(addressedSession(request))
+    if (host !== undefined) {
+      return this.remoteSessions.stream<SessionFollowFrame>(host, 'session/follow', request, signal)
+    }
     return this.history.follow(request, signal)
   }
 
@@ -547,6 +577,10 @@ export class SessionController extends TypertRemoteService {
   @Remote('projections')
   async projections(request: SessionProjectionsRequest, signal: AbortSignal): Promise<SessionProjectionsValue> {
     const { sessionId } = request
+    const host = this.remoteSessions.hostOf(sessionId)
+    if (host !== undefined) {
+      return this.remoteSessions.invoke<SessionProjectionsValue>(host, 'session/projections', request, signal)
+    }
     if (sessionId.length === 0) {
       throw new RemoteError('gateway/bad-request', 'sessionId must not be empty', {})
     }

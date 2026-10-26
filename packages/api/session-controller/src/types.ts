@@ -174,6 +174,14 @@ export type QueueAction =
   | { readonly kind: 'remove' }
   | { readonly kind: 'steer' }
 
+/** The remote development machine that hosts one Session. */
+export interface SessionHost {
+  /** Stable configured host identity. */
+  readonly id: string
+  /** Display name, for example `H20-141-sy`. */
+  readonly name: string
+}
+
 /** One Session list entry. */
 export interface SessionSummary {
   /** Whether this Session currently owns a live Agent. */
@@ -188,6 +196,8 @@ export interface SessionSummary {
   readonly origin?: 'subagent'
   readonly cwd?: string
   readonly projections?: SessionProjectionHints
+  /** Attached remote Host owning this Session; absent for a locally hosted Session. */
+  readonly host?: SessionHost
 }
 
 /** One session-content search result. */
@@ -286,6 +296,8 @@ export interface SessionSearchValue {
 
 /** Request for a Session for a new conversation. */
 export interface SessionCreateRequest {
+  /** Attached Host to create on; omitted selects the local Host. */
+  readonly hostId?: string
   /** Workspace the Session joins; exclusive with `cwd`. */
   readonly workspaceId?: WorkspaceId
   /** Directory the Session owns when no Workspace is named. */
@@ -298,6 +310,8 @@ export interface SessionCreateRequest {
 
 /** Session creation response value. */
 export interface SessionCreateValue {
+  /** Owning Host when the Session was created remotely. */
+  readonly host?: SessionHost
   /** The created or reused Session, which may differ from the requested `sessionId`. */
   readonly sessionId: SessionId
   /** Preset the Session runs, when the deployment composes a preset roster. */
@@ -600,6 +614,12 @@ export type SessionControlFrame =
 
 declare module '@deepseek-ai/cordis' {
   interface Events {
+    /**
+     * Session directory membership changed and clients must query a fresh list.
+     * @mode emit
+     */
+    'api-session/catalog-changed'(): void
+
     /**
      * A Session became visible or its Agent was created or disposed.
      * Consumers upsert the summary and replace its current running and availability state.
