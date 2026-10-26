@@ -10,7 +10,7 @@ import css from './HostsPanel.module.css'
 
 /** Operations always carry the explicitly selected Host. */
 export type NewSessionInjected = Pick<HostsPanelInjected, 'hooks' | 'reconnectHost'> & {
-  createSession(hostId: string | null, workspaceId: WorkspaceId): Promise<void>
+  createSession(hostId: string | null, workspace: RemoteHostWorkspace): Promise<void>
   addWorkspace(hostId: string | null, path: string): Promise<RemoteHostWorkspace>
 }
 
@@ -61,7 +61,7 @@ function DestinationPicker(props: NewSessionProps & { initialHostId: string | nu
       <Button disabled={busy} onClick={actions.close}>{t('editor.cancel')}</Button>
       <Button variant="primary" disabled={busy || !ready || workspace === undefined} onClick={() => {
         if (workspace === undefined) return
-        void run(async () => { await props.createSession(hostId, workspace.workspaceId); actions.close() })
+        void run(async () => { await props.createSession(hostId, workspace); actions.close() })
       }}>{t(busy ? 'new.working' : 'new.create')}</Button>
     </>}
   >

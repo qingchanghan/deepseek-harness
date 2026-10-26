@@ -858,7 +858,7 @@ function applyMutation(summaries: readonly SessionSummary[], mutation: SessionLi
           running: mutation.summary.running,
           ...(mutation.summary.formatStatus === undefined ? {} : { formatStatus: mutation.summary.formatStatus }),
         } : {}),
-        ...(existing.cwd === undefined && mutation.summary.cwd !== undefined ? { cwd: mutation.summary.cwd } : {}),
+        ...((existing.cwd === undefined || existing.cwd === '') && mutation.summary.cwd !== undefined ? { cwd: mutation.summary.cwd } : {}),
         ...(existing.host === undefined && mutation.summary.host !== undefined ? { host: mutation.summary.host } : {}),
         ...(existing.parentSessionId === undefined && mutation.summary.parentSessionId !== undefined
           ? { parentSessionId: mutation.summary.parentSessionId } : {}),

@@ -1188,13 +1188,16 @@ describe('subagent catalogs', () => {
 })
 
 describe('remaining branches', () => {
-  it('creates on the requested Host and preserves its identity before the first list refresh', async ({ mock, remote }) => {
+  it('keeps the remote Workspace directory usable before the first catalog refresh', async ({ mock, remote }) => {
     const manager = makeManager(mock, remote)
     onTestFinished(() => manager.dispose())
-    remote.session.create.mockResolvedValue(ok({ sessionId: S1, host: { id: 'h20', name: 'H20' } }))
-    await manager.create({ hostId: 'h20', cwd: '/remote/project' })
-    expect(remote.session.create).toHaveBeenCalledExactlyOnceWith({ hostId: 'h20', cwd: '/remote/project' })
-    expect(manager.getListSnapshot().items[0]).toMatchObject({ sessionId: S1, host: { id: 'h20', name: 'H20' } })
+    remote.session.create.mockImplementation(async () => {
+      manager.handleSessionAdded(summary(S1, { cwd: '' }))
+      return ok({ sessionId: S1, host: { id: 'h20', name: 'H20' } })
+    })
+    await manager.create({ hostId: 'h20', workspaceId: 'w1' as never, cwd: '/remote/project' })
+    expect(remote.session.create).toHaveBeenCalledExactlyOnceWith({ hostId: 'h20', workspaceId: 'w1' })
+    expect(manager.getListSnapshot().items[0]).toMatchObject({ sessionId: S1, cwd: '/remote/project', host: { id: 'h20', name: 'H20' } })
   })
   it('refreshList propagates a non-Remote throw', async ({ mock, remote }) => {
     remote.session.list.mockRejectedValue(new Error('list wire down'))

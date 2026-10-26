@@ -61,9 +61,11 @@ export function apply(ctx: ClientContext): void {
       return {
         hooks: { hosts: controller.store },
         reconnectHost: id => controller.reconnect(id),
-        createSession: async (hostId, workspaceId) => {
+        createSession: async (hostId, workspace) => {
           const navigation = ctx.layout.beginNavigation()
-          const sessionId = await ctx.sessions.create({ workspaceId, ...(hostId === null ? {} : { hostId }) })
+          const sessionId = await ctx.sessions.create({ workspaceId: workspace.workspaceId, cwd: workspace.path,
+            ...(hostId === null ? {} : { hostId }),
+          })
           if (!navigation.aborted) ctx.uiWorkspace.openSession(sessionId)
         },
         addWorkspace: async (hostId, path) => {

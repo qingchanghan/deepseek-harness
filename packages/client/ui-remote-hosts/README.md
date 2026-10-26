@@ -32,7 +32,7 @@ Local Sessions appear first, followed by remote hosts in display-name order. Eac
 The sidebar workspace area also shows collapsible **Local** and remote-host groups. Open a remote Session directly there; the active conversation is highlighted. Saved disconnected or failed hosts stay listed with their status. **Manage remote hosts…** opens the connection page. Sidebar search filters remote Session titles; remote conversation content is not searched.
 
 
-When remote hosts are configured, **New Session** opens a destination picker. Choose **Local** or a remote host, select its Workspace, and select **Create Session**. The picker defaults to the current conversation's host. To add a Workspace, enter an existing absolute directory on that host. Disconnected hosts must reconnect before listing Workspaces or creating Sessions; failures leave the picker open.
+When remote hosts are configured, **New Session** opens a destination picker. Choose **Local** or a remote host, select its Workspace, and select **Create Session**. The picker defaults to the current conversation's host. The selected directory makes the blank conversation immediately usable while the remote Session catalog refreshes. To add a Workspace, enter an existing absolute directory on that host. Disconnected hosts must reconnect before listing Workspaces or creating Sessions; failures leave the picker open.
 
 <a id="dev-note"></a>
 ## Dev Note
