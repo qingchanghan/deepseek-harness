@@ -5,10 +5,18 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import type { SessionListState, SessionSummary } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
+import type { ResourceSnapshot } from '@deepseek-ai/dsh-client-resources/client'
+import type { RemoteHostWorkspaces } from '@deepseek-ai/dsh-api-remotes/client'
+import type {} from '../src/client/workspace-resource.ts'
 import { SidebarHosts, type SidebarHostsProps } from '../src/client/SidebarHosts.tsx'
 import { zh } from '../src/client/locales.ts'
 
 afterEach(cleanup)
+
+/** This component requests only remote-workspaces; the framework hook also admits other protocols. */
+function resource(snapshot: ResourceSnapshot<RemoteHostWorkspaces>): SidebarHostsProps['useResource'] {
+  return vi.fn(() => snapshot) as SidebarHostsProps['useResource']
+}
 
 /** Two machines with local, ordinary remote, child, and blank rows. */
 function props(): SidebarHostsProps {
@@ -25,7 +33,10 @@ function props(): SidebarHostsProps {
   return {
     query: '', t: makeTranslate(zh),
     useSessions: selector => selector(list),
-    usePanelInfo: selector => selector({ activePanelId: null }),
+    useResource: resource({
+      status: 'live', value: { items: [], archivedSessionIds: [], pinnedSessionIds: [] }, failure: undefined,
+    }),
+    renderFactorySlot: vi.fn<SidebarHostsProps['renderFactorySlot']>(() => null),
     useHosts: selector => selector({
       status: 'ready', error: null, notice: null,
       catalog: { writable: true, revision: 1, hosts: [{ id: 'h20', name: 'H20-141-sy', sshTarget: 'h20', status: 'connected' }] },
@@ -35,25 +46,27 @@ function props(): SidebarHostsProps {
 }
 
 describe('sidebar hosts', () => {
-  it('opens an ordinary remote Session and highlights the active conversation', () => {
+  it('delegates connected Host membership and navigation to the shared Workspace tree', () => {
     const face = props()
     render(<SidebarHosts {...face} />)
     expect(screen.getByText('H20-141-sy')).toBeDefined()
     expect(screen.queryByRole('button', { name: 'local' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'child' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'blank' })).toBeNull()
-    const row = screen.getByRole('button', { name: 'remote' })
-    expect(row.getAttribute('aria-current')).toBe('page')
-    fireEvent.click(row)
-    expect(face.openSession).toHaveBeenCalledWith('remote')
+    expect(face.useResource).toHaveBeenCalledWith('dsh-resource://remote-workspaces/h20?revision=0')
+    expect(face.renderFactorySlot).toHaveBeenCalledWith('workspace.host.tree', expect.objectContaining({
+      hostId: 'h20', label: 'H20-141-sy', workspaces: [], openSession: face.openSession, loading: false,
+    }))
     fireEvent.click(screen.getByRole('button', { name: zh['sidebar.manage'] }))
     expect(face.manageHosts).toHaveBeenCalledOnce()
   })
 
   it('filters remote titles with the workspace search query', () => {
-    render(<SidebarHosts {...props()} query="unmatched" />)
-    expect(screen.queryByRole('button', { name: 'remote' })).toBeNull()
-    expect(screen.getByText(zh['sidebar.noMatches'])).toBeDefined()
+    const face = props()
+    render(<SidebarHosts {...face} query="unmatched" />)
+    expect(face.renderFactorySlot).toHaveBeenCalledWith('workspace.host.tree', expect.objectContaining({
+      query: 'unmatched', emptyLabel: zh['sidebar.noMatches'],
+    }))
   })
 
   it('keeps disconnected and failed hosts visible without Sessions', () => {
@@ -71,5 +84,32 @@ describe('sidebar hosts', () => {
     expect(screen.getByText('Unavailable machine')).toBeDefined()
     expect(screen.getByRole('status', { name: zh['status.idle'] })).toBeDefined()
     expect(screen.getByRole('status', { name: zh['status.error'] })).toBeDefined()
+    expect(face.useResource).not.toHaveBeenCalled()
+    expect(face.renderFactorySlot).not.toHaveBeenCalled()
+  })
+
+  it('retains the latest membership after a stream failure and retries with a fresh resource', () => {
+    const face = props()
+    face.useResource = resource({
+      status: 'failed', value: { items: [], archivedSessionIds: [], pinnedSessionIds: [] },
+      failure: Object.assign(new Error('Lost connection'), {
+        name: 'RemoteError', isDSHRemoteError: true as const, code: 'gateway/internal' as const, details: {},
+      }),
+    })
+    render(<SidebarHosts {...face} />)
+    expect(screen.getByRole('alert').textContent).toBe(zh['new.loadFailed'])
+    expect(face.renderFactorySlot).toHaveBeenCalledWith('workspace.host.tree', expect.objectContaining({ loading: false }))
+    fireEvent.click(screen.getByRole('button', { name: zh['panel.refresh'] }))
+    expect(face.useResource).toHaveBeenLastCalledWith('dsh-resource://remote-workspaces/h20?revision=1')
+  })
+
+  it('does not invent Ungrouped membership when the first Workspace read fails', () => {
+    const face = props()
+    face.useResource = resource({ status: 'failed', value: undefined, failure: Object.assign(new Error('No baseline'), {
+      name: 'RemoteError', isDSHRemoteError: true as const, code: 'gateway/internal' as const, details: {},
+    }) })
+    render(<SidebarHosts {...face} />)
+    expect(screen.getByRole('alert')).toBeTruthy()
+    expect(face.renderFactorySlot).not.toHaveBeenCalled()
   })
 })

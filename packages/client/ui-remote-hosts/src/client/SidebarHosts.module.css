@@ -44,8 +44,7 @@
   transform: rotate(135deg);
 }
 
-.name,
-.sessionTitle {
+.name {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -83,7 +82,6 @@
   font-variant-numeric: tabular-nums;
 }
 
-.session,
 .manage {
   display: flex;
   align-items: center;
@@ -98,10 +96,6 @@
   text-align: left;
   font-size: 13px;
   line-height: 20px;
-}
-
-.session[aria-current='page'] {
-  background: var(--dsw-alias-interactive-bg-hover);
 }
 
 .manage {
@@ -127,7 +121,6 @@
 }
 
 .heading:focus-visible,
-.session:focus-visible,
 .manage:focus-visible {
   outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color);
   outline-offset: -2px;
@@ -135,7 +128,6 @@
 
 @media (hover: hover) {
   .heading:hover,
-  .session:hover,
   .manage:hover {
     background: var(--dsw-alias-interactive-bg-hover);
   }

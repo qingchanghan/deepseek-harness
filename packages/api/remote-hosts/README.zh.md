@@ -57,7 +57,7 @@ kind: "package-reference"
 </details>
 
 
-`workspaces(id, signal)` 读取并校验所连接 Host 的 `workspace/follow` 流中的第一个基线，然后关闭该流。`createWorkspace(id, path)` 通过 `workspace/create` 将已有远程目录加入工作区。每个 `RemoteHostWorkspace` 包含 `workspaceId`、`path` 和 `title`。两者都要求主机已连接，并保留远程 Workspace 标识；不会修改本地 Workspace 注册表。
+`followWorkspaces(id, signal)` 校验所连接 Host 的 `workspace/follow` 基线与增量，并持续产出完整的 `RemoteHostWorkspaces` 快照，直到取消。快照保留工作区顺序、会话归属、创建与更新时间、归档和置顶状态。无效帧或流意外关闭会明确报错；消费方保留最后一次成功的快照并提供重试。`workspaces(id, signal)` 只读取第一个快照并释放流。`createWorkspace(id, path)` 通过 `workspace/create` 将已有远程目录加入工作区。这些方法要求主机已连接，保留远程标识，不修改本地 Workspace 注册表。
 
 <a id="dev-note"></a>
 ## 开发备注

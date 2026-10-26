@@ -4,8 +4,9 @@
  */
 
 import type { WorkspaceId } from '@deepseek-ai/dsh-workspace/types'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
 
-/** Workspace offered by an attached Host for a new conversation. */
+/** Workspace membership and display metadata owned by an attached Host. */
 export interface RemoteHostWorkspace {
   /** Identity interpreted only by the selected Host. */
   readonly workspaceId: WorkspaceId
@@ -13,6 +14,22 @@ export interface RemoteHostWorkspace {
   readonly path: string
   /** User-facing Workspace title. */
   readonly title: string
+  /** Sessions assigned to this Workspace, in saved order. */
+  readonly sessionIds: readonly SessionId[]
+  /** ISO-8601 creation instant used by the Workspace hover card. */
+  readonly createdAt: string
+  /** ISO-8601 last-mutation instant. */
+  readonly updatedAt: string
+}
+
+/** Complete Workspace display state belonging to one attached Host. */
+export interface RemoteHostWorkspaces {
+  /** Workspaces in their remote display order. */
+  readonly items: readonly RemoteHostWorkspace[]
+  /** Sessions hidden by the normal Workspace browser. */
+  readonly archivedSessionIds: readonly SessionId[]
+  /** Pinned Sessions in the Host's saved order. */
+  readonly pinnedSessionIds: readonly SessionId[]
 }
 
 /** One SSH development machine this Host may attach to. */

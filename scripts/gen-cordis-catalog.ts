@@ -878,6 +878,7 @@ export const TYPE_LINK_EXEMPTIONS: Readonly<Record<string, string>> = {
   RemoteHostsSnapshot: 'connection management reads are owned by packages/api/remote-hosts/README.md',
   RemoteHostsUpdate: 'revision-checked connection edits are owned by packages/api/remote-hosts/README.md',
   RemoteHostWorkspace: 'remote Workspace choices are owned by packages/api/remote-hosts/README.md',
+  RemoteHostWorkspaces: 'remote Workspace membership snapshots are owned by packages/api/remote-hosts/README.md',
   RemoteHostHandle: 'attached Host invocation and stream handles are owned by packages/api/remote-hosts/README.md',
   ProductEvent: 'Desktop event fields are owned by packages/client/product-analytics/README.md and src/events.ts',
   ConnectionFetchHandler: 'shared Fetch dispatch is owned by packages/client/connection/src/rpc.ts',

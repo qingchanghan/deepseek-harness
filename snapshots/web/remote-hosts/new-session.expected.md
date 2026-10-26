@@ -5,6 +5,7 @@
 - text: 工作区
 - radiogroup "工作区":
   - radio "remote-project {{cwd}}/remote-project" [checked]
+  - radio "Remote history {{cwd}}"
 - text: 添加工作区目录
 - textbox "添加工作区目录"
 - text: 填写所选主机上已有目录的绝对路径。

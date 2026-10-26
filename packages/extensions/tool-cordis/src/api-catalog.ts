@@ -2018,10 +2018,16 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'Current connection handle.',
       },
       {
-        signature: '@Remote workspaces(id: string, signal: AbortSignal): Promise<{ items: RemoteHostWorkspace[] }>',
+        signature: '@Remote workspaces(id: string, signal: AbortSignal): Promise<RemoteHostWorkspaces>',
         description: 'Read the selected Host\'s Workspaces, closing the baseline stream afterwards.',
         parameters: [{ name: 'id', description: 'Configured Host identity.' }, { name: 'signal', description: 'Cancel a superseded picker read.' }],
         returns: 'Remote Workspaces in their saved order.',
+      },
+      {
+        signature: '@Remote({ mode: \'stream\' }) followWorkspaces(id: string, signal: AbortSignal): AsyncIterable<RemoteHostWorkspaces>',
+        description: 'Follow the selected Host\'s Workspace membership and display state.',
+        parameters: [{ name: 'id', description: 'Configured Host identity.' }, { name: 'signal', description: 'Client resource lifetime; cancellation closes the remote follower.' }],
+        returns: 'Complete Workspace snapshots after each ordered remote change.',
       },
       {
         signature: '@Remote createWorkspace(id: string, path: string): Promise<RemoteHostWorkspace>',
@@ -6861,7 +6867,11 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'RemoteHostWorkspace',
-    declaration: 'export interface RemoteHostWorkspace {\n    readonly workspaceId: WorkspaceId;\n    readonly path: string;\n    readonly title: string;\n}',
+    declaration: 'export interface RemoteHostWorkspace {\n    readonly workspaceId: WorkspaceId;\n    readonly path: string;\n    readonly title: string;\n    readonly sessionIds: readonly SessionId[];\n    readonly createdAt: string;\n    readonly updatedAt: string;\n}',
+  },
+  {
+    name: 'RemoteHostWorkspaces',
+    declaration: 'export interface RemoteHostWorkspaces {\n    readonly items: readonly RemoteHostWorkspace[];\n    readonly archivedSessionIds: readonly SessionId[];\n    readonly pinnedSessionIds: readonly SessionId[];\n}',
   },
   {
     name: 'RemoteStream',

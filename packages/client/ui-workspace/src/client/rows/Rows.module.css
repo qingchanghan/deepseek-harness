@@ -274,14 +274,20 @@
   margin-left: auto;
 }
 
-.sessionRow:hover .time,
+.sessionRow.hasActions:hover .time,
 .sessionRow.menuOpen .time {
   display: none;
 }
 
+.projectRow:focus-visible,
+.sessionRow:focus-visible {
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: -2px;
+}
+
 /* Hover swaps the trailing cell to the action buttons, which already carry
    the pin/archive glyphs — hide the static markers so they do not double. */
-.sessionRow:hover .pinIndicator,
+.sessionRow.hasActions:hover .pinIndicator,
 .sessionRow.menuOpen .pinIndicator {
   display: none;
 }

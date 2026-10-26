@@ -240,11 +240,10 @@ function sessionVisible(
   current: SessionId | undefined,
   archived: ReadonlySet<SessionId>,
   archivedFilter: ArchivedFilter,
+  hostId?: string,
 ): boolean {
   if (session.origin === 'subagent') return false
-  // Attached remote Sessions belong to the Hosts panel, not to a local
-  // Workspace's session list.
-  if (session.host !== undefined) return false
+  if (session.host?.id !== hostId) return false
   if (session.blank && session.id !== current) return false
   switch (archivedFilter) {
     case 'default':
@@ -340,6 +339,7 @@ function groupByWorkspace(
   archived: ReadonlySet<SessionId>,
   archivedFilter: ArchivedFilter,
   ungroupedOrder: readonly string[] | undefined,
+  hostId?: string,
 ): Group[] {
   const current = mainSessionId(list)
   const groups: Group[] = []
@@ -350,7 +350,7 @@ function groupByWorkspace(
       const summary = list.byId[id]
       if (summary === undefined) continue // account may lead the list pull; the row appears when the summary lands
       accounted.add(id)
-      if (!sessionVisible(summary, current, archived, archivedFilter)) continue
+      if (!sessionVisible(summary, current, archived, archivedFilter, hostId)) continue
       members.push(summary)
     }
     // The archived-only view lists archives, not the Workspace inventory, so
@@ -364,7 +364,7 @@ function groupByWorkspace(
   const stray = list.ids
     .map(id => list.byId[id])
     .filter((s): s is SessionSummary =>
-      s !== undefined && !accounted.has(s.id) && sessionVisible(s, current, archived, archivedFilter))
+      s !== undefined && !accounted.has(s.id) && sessionVisible(s, current, archived, archivedFilter, hostId))
   if (stray.length > 0) {
     groups.push(buildGroup(
       UNGROUPED_KEY,
@@ -434,6 +434,7 @@ function sessionNode(
  * @param rowState - registry-global pin and archive sets plus the archived filter.
  * @param statuses - unified UI status by Session.
  * @param view - local expansion arrays.
+ * @param hostId - selected attached Host; omitted selects Local.
  * @returns group sections in render order.
  */
 export function deriveGroups(
@@ -442,16 +443,17 @@ export function deriveGroups(
   rowState: SessionRowState,
   statuses: SessionStatuses,
   view: TreeView,
+  hostId?: string,
 ): GroupNode[] {
   const archived = new Set(rowState.archivedSessionIds)
   const pinned = new Set(rowState.pinnedSessionIds)
   const expandedGroups = new Set(view.expandedGroups)
   const current = mainSessionId(list)
-  const currentGroup = current === undefined
+  const currentGroup = current === undefined || list.byId[current]?.host?.id !== hostId
     ? undefined
     : owningGroupKey(workspaces, current)
   const groups: GroupNode[] = []
-  for (const g of groupByWorkspace(list, workspaces, archived, rowState.archivedFilter, view.ungroupedOrder)) {
+  for (const g of groupByWorkspace(list, workspaces, archived, rowState.archivedFilter, view.ungroupedOrder, hostId)) {
     const expanded = expandedGroups.has(g.key)
     groups.push({
       key: g.key,

@@ -224,7 +224,15 @@ connection(id: string): RemoteHostHandle
  * @param signal - Cancel a superseded picker read.
  * @returns Remote Workspaces in their saved order.
  */
-@Remote workspaces(id: string, signal: AbortSignal): Promise<{ items: RemoteHostWorkspace[] }>
+@Remote workspaces(id: string, signal: AbortSignal): Promise<RemoteHostWorkspaces>
+
+/**
+ * Follow the selected Host's Workspace membership and display state.
+ * @param id - Configured Host identity.
+ * @param signal - Client resource lifetime; cancellation closes the remote follower.
+ * @returns Complete Workspace snapshots after each ordered remote change.
+ */
+@Remote({ mode: 'stream' }) followWorkspaces(id: string, signal: AbortSignal): AsyncIterable<RemoteHostWorkspaces>
 
 /**
  * Add an existing directory to the selected Host's Workspace registry.

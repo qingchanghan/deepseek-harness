@@ -66,6 +66,17 @@ const rowState = (options: {
 const noRows = rowState()
 
 describe('owningGroupKey', () => {
+  it('keeps each Host selection out of the other Host Ungrouped folder', () => {
+    const catalog = list(summary('local', 1), { ...summary('remote', 2), host: { id: 'h20', name: 'H20' } })
+    const localActive = withMain(catalog, sid('local'))
+    const remote = deriveGroups(localActive, [], noRows, noAttention, view([UNGROUPED_KEY]), 'h20')
+    expect(remote[0]?.sessions.map(row => row.id)).toEqual([sid('remote')])
+    expect(remote[0]?.containsCurrent).toBe(false)
+    const remoteActive = withMain(catalog, sid('remote'))
+    expect(deriveGroups(remoteActive, [], noRows, noAttention, view([UNGROUPED_KEY]))[0]?.containsCurrent).toBe(false)
+    expect(deriveGroups(remoteActive, [], noRows, noAttention, view([UNGROUPED_KEY]), 'h20')[0]?.containsCurrent).toBe(true)
+  })
+
   it('returns the owning Workspace id or the Ungrouped key', () => {
     const workspaces = [workspace('first', ['owned'])]
     expect(owningGroupKey(workspaces, sid('owned'))).toBe('first')

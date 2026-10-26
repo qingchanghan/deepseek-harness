@@ -210,18 +210,23 @@ function rowHalf(e: { clientY: number; currentTarget: HTMLElement }): 'before' |
  * @param props.group - derived group node.
  * @param props.containsCurrentDescendant - highlight an ancestor even when its subtree is collapsed.
  * @param props.onToggle - expand/collapse the group.
- * @param props.onCreate - start a frontend Session inside this Workspace.
+ * @param props.onCreate - optional creation action owned by this Workspace's Host.
+ * @param props.tabIndex - make the row keyboard-operable when its tree has no roving-focus owner.
  * @param props.drag - optional workspace-row drag wiring.
  * @param props.home - host account home for POSIX hover-path abbreviation.
  * @param props.t - the browser root's locale seat.
  * @returns the row element.
  */
-export function ProjectRowItem({ group, containsCurrentDescendant = false, onToggle, onCreate, actions, drag, home, newShortcut, t }: {
+export function ProjectRowItem({
+  group, containsCurrentDescendant = false, onToggle, onCreate, actions, drag, home, newShortcut, tabIndex, t,
+}: {
   group: GroupNode
   newShortcut?: ShortcutCatalogEntry | undefined
   containsCurrentDescendant?: boolean
   onToggle: () => void
-  onCreate: () => void
+  onCreate?: () => void
+  /** Focusable when the enclosing tree does not own roving focus. */
+  tabIndex?: 0
   /** Real-Workspace actions; absent for the ungrouped bucket (no menu shown). */
   actions?: { rename: () => void; delete: () => void } | undefined
   /** Present only for real Workspace rows in the grouped view. */
@@ -245,6 +250,12 @@ export function ProjectRowItem({ group, containsCurrentDescendant = false, onTog
       data-row-key={`workspace:${group.key}`}
       role="treeitem"
       aria-expanded={row.expanded}
+      tabIndex={tabIndex}
+      onKeyDown={tabIndex === undefined ? undefined : (event) => {
+        if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) {
+          event.preventDefault(); onToggle()
+        }
+      }}
       onClick={onToggle}
       draggable={drag !== undefined}
       onDragStart={drag === undefined
@@ -294,7 +305,7 @@ export function ProjectRowItem({ group, containsCurrentDescendant = false, onTog
             )}
           />
         )}
-        <Tooltip label={t('actions.newSession')} shortcutKeys={newShortcut?.keys} side="bottom" align="end" delayMs={500} portal>
+        {onCreate !== undefined && <Tooltip label={t('actions.newSession')} shortcutKeys={newShortcut?.keys} side="bottom" align="end" delayMs={500} portal>
           <button
             type="button"
             className={css.iconButton}
@@ -304,7 +315,7 @@ export function ProjectRowItem({ group, containsCurrentDescendant = false, onTog
           >
             <IconNewChatOutlineRegular />
           </button>
-        </Tooltip>
+        </Tooltip>}
       </span>
     </div>
   )
@@ -427,7 +438,7 @@ function PinnedIndicator({ t }: { t: RowTranslate }) {
 function SessionHoverContent({ node, now, renderSlot, t }: {
   node: SessionNode
   now: number
-  renderSlot: RowRenderSlots
+  renderSlot: RowRenderSlots | undefined
   t: RowTranslate
 }) {
   // On archived rows the archived line already says the session is inactive,
@@ -440,7 +451,7 @@ function SessionHoverContent({ node, now, renderSlot, t }: {
       {/* Same placeholder rule as the row's trailing cell: no timestamp
           before the first prompt. */}
       {!node.blank && <div className={css.hoverTime}>{hoverTimeLabel(node.updatedAt, now, t)}</div>}
-      {renderSlot('sidebar.session.row.hover', { sessionId: node.id })}
+      {renderSlot?.('sidebar.session.row.hover', { sessionId: node.id })}
       {statuses.map(status => (
         <div className={css.hoverStatus} key={status.label}>
           <StateDot state={status.state} />
@@ -533,35 +544,38 @@ export function SearchResultItem({ result, currentId, onOpen, onUnarchive, t }: 
  * @param props.currentId - selected session id (row highlight).
  * @param props.now - epoch ms for relative-time formatting.
  * @param props.onOpen - open a session by id.
- * @param props.onRenameRequest - open the rename dialog from a title double-click (id + current title).
+ * @param props.onRenameRequest - optional rename dialog from a title double-click (id + current title).
  * @param props.renderSlot - child-seat renderer for the row's action lists
  * (`sidebar.workspaces.session.menu.item` / `sidebar.workspaces.session.row.action`),
- * its leading decoration, and its hover-card section.
+ * its leading decoration, and its hover-card section; absent when the row's Host exposes navigation only.
+ * @param props.tabIndex - make the row keyboard-operable when its tree has no roving-focus owner.
  * @param props.onReveal - scroll this row into view after search navigation, then acknowledge it.
  * @param props.drag - optional row-drag target wiring; blank rows cannot start a drag.
  * @param props.t - the browser root's locale seat.
  * @returns the session row.
  */
 export function SessionNodeItem({
-  node, currentId, now, onOpen, onRenameRequest, renderSlot, onReveal, drag, t,
+  node, currentId, now, onOpen, onRenameRequest, renderSlot, onReveal, drag, tabIndex, t,
 }: {
   node: SessionNode
   currentId: string | undefined
   now: number
   onOpen: (id: SessionNode['id']) => void
   /** Open the rename dialog from a title double-click (id + current title). */
-  onRenameRequest: (id: SessionNode['id'], currentTitle: string) => void
+  onRenameRequest?: (id: SessionNode['id'], currentTitle: string) => void
+  /** Focusable when the enclosing tree does not own roving focus. */
+  tabIndex?: 0
   /** Scroll this row into view after search navigation, then acknowledge it. */
   onReveal?: (() => void) | undefined
   /** Present on reorderable-list rows so every row can remain a drop target. */
   drag?: RowDragProps | undefined
   t: RowTranslate
-} & PropsRenderSlots<
+} & Partial<PropsRenderSlots<
   | 'sidebar.workspaces.session.menu.item'
   | 'sidebar.workspaces.session.row.action'
   | 'sidebar.session.row.leading'
   | 'sidebar.session.row.hover'
->) {
+>>) {
   const row = node
   const title = displayTitle(node, t)
   const selected = node.id === currentId
@@ -589,12 +603,18 @@ export function SessionNodeItem({
       ref={rowRef}
       data-row-key={`session:${node.id}`}
       className={clsx(
-        css.sessionRow, selected && css.selected, menuOpen && css.menuOpen,
+        css.sessionRow, renderSlot !== undefined && css.hasActions, selected && css.selected, menuOpen && css.menuOpen,
         row.archived && css.archived,
         drag?.marker === 'before' && css.dropBefore, drag?.marker === 'after' && css.dropAfter,
       )}
       role="treeitem"
       aria-selected={selected}
+      tabIndex={tabIndex}
+      onKeyDown={tabIndex === undefined ? undefined : (event) => {
+        if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) {
+          event.preventDefault(); onOpen(node.id)
+        }
+      }}
       aria-description={row.archived ? t('toast.archivedNotOpenable') : undefined}
       onClick={() => { onOpen(node.id) }}
       onPointerEnter={marquee.enter}
@@ -632,12 +652,12 @@ export function SessionNodeItem({
       <span className={css.slot}>
         {!row.archived && !row.blank && (showStatus
           ? <SessionStatusDots statuses={statuses} />
-          : renderSlot('sidebar.session.row.leading', { sessionId: node.id }))}
+          : renderSlot?.('sidebar.session.row.leading', { sessionId: node.id }))}
       </span>
       <span
         ref={titleRef}
         className={css.title}
-        onDoubleClick={row.blank
+        onDoubleClick={row.blank || onRenameRequest === undefined
           ? undefined
           : (e) => { e.stopPropagation(); onRenameRequest(node.id, row.title) }}
       >
@@ -661,7 +681,7 @@ export function SessionNodeItem({
       {/* The strip's clicks stay in the strip: the trigger and every
           row.action entry act without also opening the row, so an entry's
           button needs no propagation handling of its own. */}
-      {!row.blank && (
+      {!row.blank && renderSlot !== undefined && (
         <span className={css.rowActions} onClick={(e) => { e.stopPropagation() }}>
           <Menu
             open={menuOpen}

@@ -57,7 +57,7 @@ Attachment reads every `<remoteHome>/web-instances/*.json`, chooses the newest d
 </details>
 
 
-`workspaces(id, signal)` reads and validates the first baseline from the attached Host's `workspace/follow` stream, then closes that stream. `createWorkspace(id, path)` adopts an existing remote directory through `workspace/create`. Each `RemoteHostWorkspace` carries `workspaceId`, `path`, and `title`. Both methods require a connected host and preserve remote Workspace identities; neither modifies the local Workspace registry.
+`followWorkspaces(id, signal)` validates the attached Host's `workspace/follow` baseline and increments, yielding complete `RemoteHostWorkspaces` snapshots until cancellation. Snapshots preserve Workspace order, membership, creation and update times, archives, and pins. Invalid frames and unexpected stream closure fail visibly; consumers retain their last successful snapshot while offering retry. `workspaces(id, signal)` reads only the first snapshot and releases the stream. `createWorkspace(id, path)` adopts an existing remote directory through `workspace/create`. These methods require a connected host, preserve remote identities, and do not modify the local Workspace registry.
 
 <a id="dev-note"></a>
 ## Dev Note

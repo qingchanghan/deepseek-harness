@@ -2,5 +2,8 @@
   - text: Loopback development machine
   - status "已连接"
   - text: "1"
-  - button "Recorded remote Session"
+  - tree "Loopback development machine":
+    - group:
+      - treeitem "Remote history" [expanded]
+      - treeitem "Recorded remote Session {{age}}" [selected]
 - button "管理远程主机…"

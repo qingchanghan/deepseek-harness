@@ -21,8 +21,8 @@ import type { ForwardedRemoteEvent } from '@deepseek-ai/dsh-api-gateway/types'
 import z from '@deepseek-ai/schemastery'
 import { RemoteHostClient, RemoteHostFailure } from './remote-client.ts'
 import { listRemoteInstances, newestInstance, openTunnel, type SshTarget, type Tunnel } from './ssh.ts'
-import type { RemoteHostEntry, RemoteHostStatus, RemoteHostsSnapshot, RemoteHostsUpdate, RemoteHostWorkspace } from './types.ts'
-import { readWorkspaces, addWorkspace } from './workspaces.ts'
+import type { RemoteHostEntry, RemoteHostStatus, RemoteHostsSnapshot, RemoteHostsUpdate, RemoteHostWorkspace, RemoteHostWorkspaces } from './types.ts'
+import { readWorkspaces, addWorkspace, followWorkspaces } from './workspaces.ts'
 
 export type * from './types.ts'
 export { RemoteHostFailure } from './remote-client.ts'
@@ -275,8 +275,19 @@ export default class RemoteHosts extends TypertRemoteService {
    * @returns Remote Workspaces in their saved order.
    */
   @Remote
-  workspaces(id: string, signal: AbortSignal): Promise<{ items: RemoteHostWorkspace[] }> {
+  workspaces(id: string, signal: AbortSignal): Promise<RemoteHostWorkspaces> {
     return readWorkspaces(this.connection(id), AbortSignal.any([signal, AbortSignal.timeout(this.config.timeoutMs)]))
+  }
+
+  /**
+   * Follow the selected Host's Workspace membership and display state.
+   * @param id - Configured Host identity.
+   * @param signal - Client resource lifetime; cancellation closes the remote follower.
+   * @returns Complete Workspace snapshots after each ordered remote change.
+   */
+  @Remote({ mode: 'stream' })
+  followWorkspaces(id: string, signal: AbortSignal): AsyncIterable<RemoteHostWorkspaces> {
+    return followWorkspaces(this.connection(id), signal)
   }
 
   /**
