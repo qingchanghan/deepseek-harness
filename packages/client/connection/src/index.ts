@@ -54,6 +54,7 @@ export {
 export { HostConnectionService } from './rpc-host.ts'
 
 export { API_PATH } from './api-path.ts'
+export { createWebConnectionRpc } from './client/rpc.ts'
 
 /** Stable Cordis plugin name. */
 export const name = 'client-connection'

@@ -24,7 +24,9 @@ Web 与桌面客户端只连接一个 Host。`ctx.connection` 拥有一个传输
 
 ### Session federation
 
-`session/list` 把每台已连接 Host 的目录并入本地列表，并为每个远端行标注 `host: { id, name }`。若某行的身份已被本地会话使用，则保留本地。Session Controller 从这次合并中记住每个远端会话的属主，并把 `follow`、`page`、`prompt`、`cancel`、队列编辑、projections、重命名、fork、模型选择与附件读取路由给属主 Host；成功值与流数据原样通过，远端失败转为本地 `gateway/internal` 错误并在消息中保留远端错误码。
+`session/list` 将每台已连接 Host 的目录合并到本机列表，为远程行标注 `host: { id, name }`。本机会话已占用的标识仍归本机所有。Session Controller 在断连后继续保留每个远程会话的所属 Host，并将会话操作路由到该 Host。其 Gateway 转发器在本机 lookup 或 agent 激活之前解析会话资源，同时覆盖命令目录与工作区文件。成功值保留二进制附件，远程失败保留错误码和详情。转发仅接受所有者调用，因为连接传输无法代表另一主体的权限；在传输支持上行流之前，上行流会被拒绝。
+
+联合控制流在实时投影更新之前发布合并后的 Local 与远程基线，使收件队列、steering（中途引导）、Goal 和待办事项采用相同的可观察路径。Host 成员变化会重启控制流，取消或任一来源失败会关闭全部跟随者。
 
 远端的 `$events` 流由连接方自己消费。`api-session/*` 通知以同名 Cordis 事件在本地重新发布，因此运行状态、标题与活动时间像本地会话一样到达浏览器。转发的 `approval/request` 或 `user-questions/request` 会进入本地应用桥：Gateway 像本地 waterfall 一样把它交给每个正在应答的浏览器，第一个答案回传给远端 Host，问题落定后合成 Agent Context 会被释放。没有应答浏览器时，以及其他所有 waterfall，都以 `next` 回复，让远端应答链继续处理。
 
@@ -46,7 +48,7 @@ Web 与桌面客户端只连接一个 Host。`ctx.connection` 拥有一个传输
 
 本地 Host 现在负责 SSH 子进程、隧道、API Cookie 与重连，并且每个按会话寻址的方法都必须让远端委托与本地实现保持一致。连接要求监听器使用明文 HTTP，且能从 SSH 目标访问；HTTPS 实例描述会被明确拒绝。
 
-只有在有浏览器连接并持有该会话时，远端审批才会到达本地浏览器；否则交回远端链路，远端没有应答者时按失败关闭。实时控制流仍只在本地，因此已连接会话的 Goal 与 todo 投影要重新打开才刷新。`session/create` 接受明确指定的所连接 Host，并在历史订阅或消息发送前登记返回的标识；`session/search` 仍在本地。目标选择器读取远程 Workspace 基线，并可将已有远程目录加入远程工作区，无需在本地注册。主机面板通过检查修订号的设置更新，把连接保存到 profile 的 `remote-hosts` 行；断开会保留配置并暂停重试，直到重新连接或重启应用。
+只有在有浏览器连接并持有该会话时，远端审批才会到达本地浏览器；否则交回远端链路，远端没有应答者时按失败关闭。`session/create` 接受明确指定的所连接 Host，并在历史订阅或消息发送前登记返回的标识；`session/search` 仍在本地。目标选择器读取远程 Workspace 基线，并可将已有远程目录加入远程工作区，无需在本地注册。主机面板通过检查修订号的设置更新，把连接保存到 profile 的 `remote-hosts` 行；断开会保留配置并暂停重试，直到重新连接或重启应用。
 
 ## Testing
 

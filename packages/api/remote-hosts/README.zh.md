@@ -50,6 +50,8 @@ kind: "package-reference"
 
 连接时读取 `<remoteHome>/web-instances/*.json` 的全部描述，选择最新的一条，并打开 `ssh -N -L 127.0.0.1:<local>:<host>:<port>`。就绪信号是本地端口可以建立连接，因为 OpenSSH 只在控制通道上报告转发成功。客户端用描述中的启动 token 在 `/connect` 换取 API Cookie，随后一元调用走 `/api/<endpoint>`，所有流共用一条 `/api/remote.mux` socket，符合每个 API Peer 只拥有一个 socket 的约束。
 
+一元调用转发使用共享的 Connection 解析器处理 JSON 与 multipart 字节结果，包括文件预览。失败保留远端错误码和详情。Session Controller 将远程控制基线与实时投影合并到 Local 状态，因此远程队列与 steering（中途引导）无需重新打开会话即可更新。
+
 `describe()` 返回 `RemoteHostsSnapshot`：其中每个 `RemoteHostStatus` 包含连接配置字段、显示名、生命周期状态，以及可选的错误信息或进程 id；快照还报告设置是否可写及其修订号。`setHosts(RemoteHostsUpdate)` 接收完整的连接列表与 `expectedRevision`；修订号过期时会拒绝写入，避免覆盖其他编辑。`reconnect(id)` 与 `disconnectHost(id)` 返回相同的快照。Host 消费方通过 `connected()` 获取 `RemoteHostHandle`，并调用其 `invoke(endpoint, args, signal?)` 与 `stream(endpoint, payload, signal?)`。
 
 `$events` 的 emit 在本地重新发布。审批和提问通过交互桥到达本地浏览器；没有本地应答者时，请求交回远端链路。连接变化会使会话目录失效，浏览器据此读取当前主机列表。
@@ -83,6 +85,5 @@ None.
 <a id="known-limitations-and-deferred-work"></a>
 
 - **远端审批需要浏览器应答** — `approval/request` 与 `user-questions/request` 会桥接到本地浏览器既有的审批界面；没有已连接的应答浏览器时交回远端链路，远端也没有应答者则按失败关闭。
-- **控制流仅限本地** — 远端 Host 的实时投影推送尚未合并，远端 Goal 与 todo 栏需重新打开才刷新。
 - **不支持 HTTPS** — 连接要求通过 SSH 转发访问远端 HTTP 监听。
 - **内容搜索仍为本地** — `session/search` 尚未到达所连接的 Host。

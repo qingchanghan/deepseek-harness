@@ -50,6 +50,8 @@ Open **Hosts** in the sidebar to add or edit connections, inspect failures, and 
 
 Attachment reads every `<remoteHome>/web-instances/*.json`, chooses the newest descriptor, and opens `ssh -N -L 127.0.0.1:<local>:<host>:<port>`. Readiness is the local port accepting a connection, because OpenSSH reports forwarding success only on its control channel. The client exchanges the descriptor's launch token at `/connect` for an API cookie, then uses `/api/<endpoint>` for unary calls and one `/api/remote.mux` socket for every stream, matching the one-socket-per-API-Peer rule.
 
+Unary forwarding uses the shared Connection parser for JSON and multipart byte results, including file previews. Failures retain the remote code and details. The Session Controller combines remote control baselines and live projections with Local state, so remote queues and steering update without reopening the Session.
+
 `describe()` returns a `RemoteHostsSnapshot`: every `RemoteHostStatus` includes its configured connection fields, display name, lifecycle status, and optional error or process id; the snapshot also reports whether settings are writable and their revision. `setHosts(RemoteHostsUpdate)` accepts the complete connection list and `expectedRevision`; stale revisions fail without overwriting another edit. `reconnect(id)` and `disconnectHost(id)` return the same snapshot. Host consumers use `connected()` for `RemoteHostHandle` instances exposing `invoke(endpoint, args, signal?)` and `stream(endpoint, payload, signal?)`.
 
 `$events` emits are republished locally. Approval and question requests reach the local browser through the interaction bridge; requests without a local answerer delegate back to the remote chain. Connection changes invalidate the Session catalog so browsers read the current host membership.
@@ -83,6 +85,5 @@ No direct effect.
 <a id="known-limitations-and-deferred-work"></a>
 
 - **Remote approvals need an answering browser** — `approval/request` and `user-questions/request` are bridged into the local browser's normal approval UI; with no answering browser connected they are delegated back to the remote chain, which fails closed when it has no answerer of its own.
-- **The control stream is local-only** — live projection pushes from an attached Host are not merged, so remote Goal and todo bars refresh on reopen rather than live.
 - **HTTPS is unsupported** — attachment requires a remote HTTP listener reached through the SSH forward.
 - **Content search stays local** — `session/search` does not reach attached Hosts.

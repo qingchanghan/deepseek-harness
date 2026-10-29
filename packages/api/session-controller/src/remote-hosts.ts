@@ -11,6 +11,7 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import type { RemoteHostHandle } from '@deepseek-ai/dsh-api-remote-hosts'
+import type {} from '@deepseek-ai/dsh-api-gateway'
 import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import { z } from 'zod'
@@ -35,9 +36,17 @@ export class RemoteSessionDirectory {
       if (host !== undefined) this.owners.set(summary.sessionId, host)
     })
     ctx.on('api-session/removed', (sessionId) => { this.owners.delete(sessionId) })
-    ctx.on('remote-hosts/changed', () => {
-      const connected = new Set(this.hosts().map(host => host.id))
-      for (const [id, host] of this.owners) if (!connected.has(host.id)) this.owners.delete(id)
+    ctx.inject(['typertGateway'], (scope) => {
+      scope.effect(() => scope.typertGateway.registerForwarder((resources) => {
+        const sessions = resources.flatMap(resource => resource.kind === 'session' ? [resource.id] : [])
+        const hosts = sessions.map(id => this.hostOf(id))
+        const target = hosts.find(host => host !== undefined)
+        if (target === undefined) return undefined
+        if (hosts.some(host => host?.id !== target.id)) {
+          throw new RemoteError('gateway/bad-request', 'A request cannot span Sessions on different Hosts', {})
+        }
+        return target
+      }), 'session-controller: remote resource routing')
     })
   }
 
@@ -79,6 +88,7 @@ export class RemoteSessionDirectory {
     const hosts = this.hosts()
     if (hosts.length === 0) return [...local]
     const localIds = new Set(local.map(summary => summary.sessionId))
+    for (const id of localIds) this.owners.delete(id)
     const groups = await Promise.all(hosts.map(async (host) => {
       try {
         // The remote descriptor names its only request parameter `_request`.
@@ -105,7 +115,11 @@ export class RemoteSessionDirectory {
    * @returns its Host, or undefined for a locally hosted Session.
    */
   hostOf(sessionId: SessionId): RemoteHostHandle | undefined {
-    return this.owners.get(sessionId)
+    const owner = this.owners.get(sessionId)
+    if (owner === undefined) return undefined
+    const host = this.hosts().find(candidate => candidate.id === owner.id)
+    if (host === undefined) throw new RemoteError('remote-hosts/not-connected', `Host ${owner.name} is disconnected; reconnect to continue`, { id: owner.id })
+    return host
   }
 
   /**
@@ -118,18 +132,7 @@ export class RemoteSessionDirectory {
    * @throws RemoteError when the remote Host refuses the call or its transport fails.
    */
   async invoke<T>(host: RemoteHostHandle, endpoint: string, request: object, signal?: AbortSignal): Promise<T> {
-    try {
-      // Remote descriptors use the method's parameter names: every routed
-      // Session method names its request parameter `request`.
-      return await host.invoke(endpoint, { request }, signal) as T
-    } catch (error: unknown) {
-      // The remote code remains readable in the message; the local Gateway has
-      // no declaration for a code this checkout may not know.
-      const code = typeof error === 'object' && error !== null && 'code' in error && typeof error.code === 'string'
-        ? error.code
-        : 'gateway/internal'
-      throw new RemoteError('gateway/internal', `${code}: ${error instanceof Error ? error.message : String(error)}`, {}, { cause: error })
-    }
+    return await host.invoke(endpoint, { request }, signal) as T
   }
 
   /**

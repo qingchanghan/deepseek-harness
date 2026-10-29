@@ -1,0 +1,5 @@
+- text: {{cwd}}/remote-report.txt
+- button "文件路径已复制"
+- button "自动换行" [pressed]
+- button "重新读取文件"
+- text: REMOTE_FILE_PREVIEW_OK Only the remote Host owns this file.

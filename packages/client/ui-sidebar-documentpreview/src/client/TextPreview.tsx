@@ -15,7 +15,7 @@ import clsx from 'clsx'
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
 import type { InjectFace, PropsLocale, PropsRenderSlots, PropsRuntime, PropsStore } from '@deepseek-ai/dsh-client-ui-slots'
 import {
-  FileTypeIcon, IconNowrapFillRegular, IconPauseOutlineRegular, IconPlayOutlineRegular,
+  CopyButton, FileTypeIcon, IconNowrapFillRegular, IconPauseOutlineRegular, IconPlayOutlineRegular,
   IconRefreshOutlineRegular, IconWrapFillRegular, Menu, PathLabel, Tooltip, classifyFileType,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import { pathPartsOf } from '@deepseek-ai/dsh-util-workspace-path'
@@ -54,7 +54,7 @@ export type TextPreviewProps =
  * @returns the content read so far with its controls, or a progress line.
  */
 export function TextPreview({
-  useTabInfo, useResource, useStore, actions, loadPage, reloadPages,
+  useTabInfo, useResource, useStore, useSessions, actions, loadPage, reloadPages,
   loadAll, reloadAll, prepareRenderer, useDocumentPreviews, renderSlot, t,
   addResource, setResources,
 }: TextPreviewProps): ReactNode {
@@ -63,6 +63,7 @@ export function TextPreview({
   const meta = useResource<'file'>(tab.contentId)
   const canRead = meta.status !== 'none'
   const file = useMemo(() => hostFileOf(tab.contentId), [tab.contentId])
+  const remoteHost = useSessions(snapshot => snapshot.byId[file.sessionId]?.host)
   const state = useStore(s => s.byTab[tab.id])
   const definitions = useDocumentPreviews(value => value)
   const unviewable = useMemo(() => unviewableBinaryPath(file.path), [file.path])
@@ -93,7 +94,7 @@ export function TextPreview({
   const absolutePath = meta.value?.absolutePath ?? current?.complete?.absolutePath
   const displayPath = absolutePath ?? file.path
   // Contributions that hand the file to the Host wait for its Host path.
-  const fileOwner = absolutePath === undefined ? undefined : { absolutePath }
+  const fileOwner = absolutePath === undefined || remoteHost !== undefined ? undefined : { absolutePath }
   // Every tab of this type is a `file` resource address, so its params are the
   // `file` type's; the union is narrowed on the one field read, not validated.
   const line = navigation.params !== undefined && 'line' in navigation.params ? navigation.params.line : undefined
@@ -202,6 +203,7 @@ export function TextPreview({
       <div className={css.preview} data-textpreview-state="unsupported" data-textpreview-url={tab.contentId}>
         <div className={css.header}>
           <PathLabel path={displayPath} className={css.path} data-textpreview-path />
+          <CopyButton text={displayPath} label={t('copyPath')} copiedLabel={t('pathCopied')} failedLabel={t('copyFailed')} />
           {fileOwner !== undefined && renderSlot('sidebar.right.tab.document.actions', fileOwner)}
         </div>
         <div className={css.body} data-textpreview-body>
@@ -264,6 +266,7 @@ export function TextPreview({
         )}
       <div className={css.header}>
         <PathLabel path={displayPath} className={css.path} data-textpreview-path />
+        <CopyButton text={displayPath} label={t('copyPath')} copiedLabel={t('pathCopied')} failedLabel={t('copyFailed')} />
         {candidates.length > 1
           && (
             <Menu

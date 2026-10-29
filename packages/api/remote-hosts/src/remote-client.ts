@@ -9,7 +9,7 @@
  * @module @deepseek-ai/dsh-api-remote-hosts/remote-client
  */
 
-import { randomUUID } from 'node:crypto'
+import { createWebConnectionRpc } from '@deepseek-ai/dsh-client-connection'
 import WebSocket, { type RawData } from 'ws'
 
 /** One failure reported by the remote Host for a Remote call. */
@@ -25,6 +25,8 @@ export interface RemoteWireFailure {
 /** A Remote call the remote Host refused, or a transport failure it never answered. */
 export class RemoteHostFailure extends Error {
   override readonly name = 'RemoteHostFailure'
+  /** Preserve the remote failure code through the forwarding Gateway. */
+  readonly isDSHRemoteError: true = true
 
   /**
    * @param failure - code, message, and details reported for the call.
@@ -133,55 +135,29 @@ export class RemoteHostClient {
     ])
     const cookie = await this.apiCookie(requestSignal)
     requestSignal.throwIfAborted()
-    const rpcId = randomUUID()
-    let response: Response
-    try {
-      response = await this.fetchImpl(new URL(`/api/${endpoint}`, this.baseUrl), {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          cookie,
-        },
-        body: JSON.stringify({
-          type: 'client-request',
-          rpcId,
-          method: endpoint,
-          payload: { args },
-        }),
-        signal: requestSignal,
-      })
-    } catch (error: unknown) {
-      throw new RemoteHostFailure({
-        code: 'remote-host/unreachable',
-        message: error instanceof Error ? error.message : String(error),
-        details: {},
-      })
-    }
-    if (!response.ok) {
-      throw new RemoteHostFailure({
-        code: 'remote-host/http',
-        message: `remote Host answered ${String(response.status)} for ${endpoint}`,
-        details: { status: response.status },
-      })
-    }
-    const body: unknown = await response.json()
-    if (!isRecord(body) || body['type'] !== 'server-response' || body['rpcId'] !== rpcId) {
-      throw new RemoteHostFailure({
-        code: 'remote-host/protocol',
-        message: `remote Host returned a malformed response for ${endpoint}`,
-        details: {},
-      })
-    }
-    const result = body['result']
-    if (!isRecord(result) || typeof result['ok'] !== 'boolean') {
-      throw new RemoteHostFailure({
-        code: 'remote-host/protocol',
-        message: `remote Host returned a malformed result for ${endpoint}`,
-        details: {},
-      })
-    }
-    if (result['ok']) return result['value']
-    throw new RemoteHostFailure(failureOf(result['error'], endpoint))
+    const rpc = createWebConnectionRpc(async (route, init) => {
+      const headers = new Headers(init.headers)
+      headers.set('cookie', cookie)
+      let response: Response
+      try {
+        response = await this.fetchImpl(new URL(`/${String(route)}`, this.baseUrl), { ...init, headers, signal: requestSignal })
+      } catch (error: unknown) {
+        requestSignal.throwIfAborted()
+        throw new RemoteHostFailure({ code: 'remote-host/unreachable',
+          message: error instanceof Error ? error.message : String(error), details: {} })
+      }
+      if (!response.ok) throw new RemoteHostFailure({ code: 'remote-host/http',
+        message: `remote Host answered ${String(response.status)} for ${endpoint}`, details: { status: response.status } })
+      return response
+    })
+    const result = await rpc.call('/api', endpoint, { args }, requestSignal).catch((error: unknown) => {
+      requestSignal.throwIfAborted()
+      if (error instanceof RemoteHostFailure) throw error
+      throw new RemoteHostFailure({ code: 'remote-host/protocol',
+        message: error instanceof Error ? error.message : String(error), details: {} })
+    })
+    if (result.ok) return result.value
+    throw new RemoteHostFailure(result.error)
   }
 
   /**
@@ -359,32 +335,4 @@ class StreamQueue implements SocketWake {
     if (item?.kind === 'end' || item?.kind === 'failure') this.ended = true
     return item
   }
-}
-
-/**
- * Validate one failure value from the wire.
- * @param value - untrusted failure payload.
- * @param endpoint - endpoint used in the default message.
- * @returns a complete failure value.
- */
-function failureOf(value: unknown, endpoint: string): RemoteWireFailure {
-  if (isRecord(value)
-    && typeof value['code'] === 'string'
-    && typeof value['message'] === 'string') {
-    return { code: value['code'], message: value['message'], details: value['details'] ?? {} }
-  }
-  return {
-    code: 'remote-host/protocol',
-    message: `remote Host returned a malformed failure for ${endpoint}`,
-    details: {},
-  }
-}
-
-/**
- * Recognize a JSON object.
- * @param value - untrusted value.
- * @returns whether the value is a non-array object.
- */
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }

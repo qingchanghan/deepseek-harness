@@ -1,7 +1,7 @@
 /** File identity, Sidebar preview, and contributed native actions for one delivery. */
 import type { ReactNode } from 'react'
 import { resolveWorkspacePath } from '@deepseek-ai/dsh-util-workspace-path'
-import { FileTypeIcon, fileExtension } from '@deepseek-ai/dsh-client-ui-primitives'
+import { CopyButton, FileTypeIcon, fileExtension } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type { PresentedHost } from '../presented.ts'
 import { PRESENTED_SUCCESS_HOLD_MS, PRESENTED_SUCCESS_FADE_MS, type PresentedOpenPhase } from './present-open.ts'
@@ -52,7 +52,11 @@ export function PresentedFileCard({ file, cwd, phase, host, onPreview, actions, 
           <span className={css.previewHint}>{t('presented.preview')}</span>
         </span>
       </div>
-      <div className={css.actions}>{actions}</div>
+      <div className={css.actions}>
+        <CopyButton text={resolveWorkspacePath(cwd, file.path)} label={t('presented.copyPath')}
+          copiedLabel={t('presented.pathCopied')} failedLabel={t('presented.copyFailed')} />
+        {actions}
+      </div>
     </div>
   </div>
 }

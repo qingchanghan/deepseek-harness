@@ -3651,6 +3651,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         throws: ['{@link TypertGatewayError} for dispatch, provider, or boundary failures; lookup-policy and business errors retain identity.'],
       },
       {
+        signature: 'registerForwarder(forwarder: TypertRemoteForwarder): () => void',
+        description: 'Register routing after argument validation and access checks, before local resolution.',
+        parameters: [{ name: 'forwarder', description: 'resource owner resolver.' }],
+        returns: 'disposer for this registration.',
+      },
+      {
         signature: 'async stream(request: InvokeRemoteRequest): Promise<AsyncIterable<unknown>>',
         description: 'Open one live stream Remote method without assuming a physical carrier.',
         parameters: [{ name: 'request', description: 'decoded endpoint, named wire arguments, and the Client uplink when the carrier has one.' }],
@@ -8598,8 +8604,16 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type TypertRemoteEventSource = (signal: AbortSignal) => AsyncIterable<TypertRemoteEventDispatch>;',
   },
   {
+    name: 'TypertRemoteForwarder',
+    declaration: 'export type TypertRemoteForwarder = (resources: readonly RemoteAccessResource[]) => TypertRemoteTarget | undefined;',
+  },
+  {
     name: 'TypertRemoteService',
     declaration: 'export abstract class TypertRemoteService<out T = never> extends Service<T> {\n    readonly typertRemote: TypertGatewayBinding<this>;\n}',
+  },
+  {
+    name: 'TypertRemoteTarget',
+    declaration: 'export interface TypertRemoteTarget {\n    invoke(endpoint: string, args: object, signal?: AbortSignal): Promise<unknown>;\n    stream(endpoint: string, payload: unknown, signal?: AbortSignal): AsyncIterable<unknown>;\n}',
   },
   {
     name: 'TypertRemoteValue',

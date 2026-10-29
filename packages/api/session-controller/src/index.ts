@@ -33,6 +33,7 @@ import { SessionSkillCatalog } from './skill-catalog.ts'
 import { SessionMediaReferences } from './media-references.ts'
 import { ArchivedSessionGate } from './archived-session-gate.ts'
 import { RemoteSessionDirectory } from './remote-hosts.ts'
+import { followRemoteControls } from './remote-control.ts'
 import type {
   ModelCatalog,
   SessionWorkspacePathApplication,
@@ -631,7 +632,7 @@ export class SessionController extends TypertRemoteService {
    */
   @Remote({ mode: 'stream' })
   async *control(signal: AbortSignal): AsyncIterable<SessionControlFrame> {
-    for await (const frame of this.controlState.control(signal)) {
+    for await (const frame of followRemoteControls(lifetime => this.controlState.control(lifetime), this.remoteSessions.hosts(), signal)) {
       switch (frame.type) {
         case 'baseline': {
           const projections = Object.fromEntries(Object.entries(frame.value.projections)

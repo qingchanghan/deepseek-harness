@@ -1,0 +1,2 @@
+- text: REMOTE_STEERING_FOLLOWUP
+- button "复制"

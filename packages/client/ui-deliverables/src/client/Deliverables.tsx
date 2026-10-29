@@ -74,6 +74,7 @@ export function Deliverables({
   const [expanded, setExpanded] = useState(false)
   const showCodeDiff = useShowCodeDiff(value => value)
   const cwd = useSessions(state => state.byId[sessionId]?.cwd)
+  const remoteHost = useSessions(state => state.byId[sessionId]?.host)
   const states = usePresentedOpen(value => value)
   const host = usePresentedHost(value => value)
   const announced = showCodeDiff ? matched.changes : null
@@ -99,11 +100,11 @@ export function Deliverables({
       className={css.root}
       data-after-changes={changes !== null || undefined}
     >
-      {host === 'error' && <div className={css.hostStatus}>
+      {remoteHost === undefined && host === 'error' && <div className={css.hostStatus}>
         <span>{t('presented.hostError')}</span>
         <Button size="sm" onClick={() => { void reloadPresentedHost() }}>{t('presented.retry')}</Button>
       </div>}
-      {host !== null && host !== 'error' && !host.available && <span className={css.hostStatus}>{t('presented.unavailable')}</span>}
+      {remoteHost === undefined && host !== null && host !== 'error' && !host.available && <span className={css.hostStatus}>{t('presented.unavailable')}</span>}
       <div className={css.presented} data-presented-files-row data-single={matched.presented.length === 1 ? true : undefined}>
         {presented.map(file => <PresentedFileCard key={`${file.seq}:${file.index}`} file={file} cwd={cwd}
           phase={states[presentedFileUrl(sessionId, file.seq, file.index)]}
@@ -111,7 +112,7 @@ export function Deliverables({
           onPreview={() => { openFile(file.path) }}
           actions={renderSlot('deliverables.file.actions', {
             actionUrl: presentedFileUrl(sessionId, file.seq, file.index),
-            available: host !== null && host !== 'error' && host.available,
+            available: remoteHost === undefined && host !== null && host !== 'error' && host.available,
             pending: states[presentedFileUrl(sessionId, file.seq, file.index)] === 'opening'
               || states[presentedFileUrl(sessionId, file.seq, file.index)] === 'revealing',
             onAction: (action, application) => openPresented(sessionId, file.seq, file.index, action, application),

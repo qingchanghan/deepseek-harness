@@ -30,6 +30,9 @@ export const zh = {
   'error.notRegularFile': '该路径不是普通文件，没有可显示的内容',
   'error.unavailable': '读取失败：{message}',
   retry: '重试',
+  copyPath: '复制文件路径',
+  pathCopied: '文件路径已复制',
+  copyFailed: '复制失败，请重试',
 } satisfies Record<string, string>
 
 /** Text-preview dictionary key union. */
@@ -59,4 +62,7 @@ export const en = {
   'error.notRegularFile': 'Not a regular file, nothing to display.',
   'error.unavailable': 'Read failed: {message}',
   retry: 'Retry',
+  copyPath: 'Copy file path',
+  pathCopied: 'File path copied',
+  copyFailed: 'Copy failed; try again',
 } satisfies Record<SidebarDocumentPreviewKey, string>

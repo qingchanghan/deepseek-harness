@@ -14,7 +14,7 @@ export type { CommandDescriptor } from '@deepseek-ai/dsh-commands/types'
 /**
  * cold = never pulled; pending = pull in flight with nothing servable;
  * ready = snapshot serving (a soft-invalidate repull keeps this status);
- * failed = last winning pull rejected, snapshot dropped.
+ * failed = last winning pull rejected; previous names identify commands but cannot execute them.
  */
 export type DirectoryStatus = 'cold' | 'pending' | 'ready' | 'failed'
 
@@ -56,6 +56,16 @@ export class CommandDirectory {
     const entry = this.entries.get(sessionId)
     if (entry === undefined || entry.state !== 'ready') return undefined
     return resolveCommand(name, entry.commands)
+  }
+
+  /**
+   * Identify a previously registered command even while its catalog cannot be refreshed.
+   * @param sessionId - Session whose catalog was read.
+   * @param name - typed name or localized alias, without the slash.
+   * @returns whether falling back to ordinary text would change a known command's meaning.
+   */
+  recognizes(sessionId: SessionId, name: string): boolean {
+    return resolveCommand(name, this.entries.get(sessionId)?.commands ?? []) !== undefined
   }
 
   /** Soft invalidation (commands-changed): background repull on every touched key; ready snapshots keep serving. */
@@ -116,7 +126,6 @@ export class CommandDirectory {
       entry.lastError = undefined
     } catch (error) {
       if (epoch !== entry.epoch) return
-      entry.commands = []
       entry.state = 'failed'
       entry.lastError = error
     } finally {

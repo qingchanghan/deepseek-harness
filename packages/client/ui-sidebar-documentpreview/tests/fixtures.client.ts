@@ -163,6 +163,7 @@ export function harness(script: Record<number, RemoteResult<WorkspaceFileText>> 
       },
     }),
     sessionId: SESSION,
+    useSessions: () => undefined,
     useResource,
     useStore: hookOf(instance),
     actions: instance.actions,

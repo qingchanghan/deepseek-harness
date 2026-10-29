@@ -44,6 +44,7 @@ import type {
   TypertRemoteEventInvocation,
   TypertRemoteEventOutcome,
   TypertRemoteEventSource,
+  TypertRemoteForwarder,
 } from './types.ts'
 import {
   RemoteStreamMuxServer,
@@ -79,6 +80,8 @@ export type {
   TypertRemoteEventInvocation,
   TypertRemoteEventOutcome,
   TypertRemoteEventSource,
+  TypertRemoteForwarder,
+  TypertRemoteTarget,
 } from './types.ts'
 export type { RemoteEventHostInfo } from './stream-protocol.ts'
 
@@ -95,10 +98,8 @@ interface ResolvedBinding {
 interface PreparedInvocation {
   readonly endpoint: string
   readonly descriptor: InvocationDescriptor
-  /** Service view bound to a Context carrying `invocation`, so the method reads it as `this.ctx.invocation`. */
-  readonly receiver: object
-  readonly args: readonly unknown[]
-  readonly method: (...args: never[]) => unknown
+  /** Invoke the local Service view or the selected Host with the same call lifetime. */
+  readonly call: () => unknown
   readonly invocation: GatewayInvocation
 }
 
@@ -222,6 +223,7 @@ export class TypertGatewayService extends Service implements TypertGateway {
   }
 
   private srcClaims: ReadonlySet<string> | undefined
+  private readonly forwarders = new Set<TypertRemoteForwarder>()
   private remoteEvents: RegisteredRemoteEventSource | undefined
   private readonly remoteEventClients = new Map<RemoteEventClientId, RemoteEventClient>()
   private readonly pendingRemoteEvents = new Map<RemoteEventId, PendingRemoteEvent>()
@@ -408,6 +410,16 @@ export class TypertGatewayService extends Service implements TypertGateway {
     return this.invokePrepared(await this.prepareInvocation(request, new AbortController()))
   }
 
+  /**
+   * Register routing after argument validation and access checks, before local resolution.
+   * @param forwarder - resource owner resolver.
+   * @returns disposer for this registration.
+   */
+  registerForwarder(forwarder: TypertRemoteForwarder): () => void {
+    this.forwarders.add(forwarder)
+    return () => { this.forwarders.delete(forwarder) }
+  }
+
   private async invokePrepared(prepared: PreparedInvocation): Promise<unknown> {
     if (prepared.descriptor.mode !== undefined) {
       throw new TypertGatewayError(
@@ -418,7 +430,7 @@ export class TypertGatewayService extends Service implements TypertGateway {
     }
 
     try {
-      return await Reflect.apply(prepared.method, prepared.receiver, prepared.args) as unknown
+      return await prepared.call()
     } catch (error) {
       if (prepared.invocation.signal.aborted) throw remoteCancelled(prepared.endpoint, error)
       throw error
@@ -453,7 +465,7 @@ export class TypertGatewayService extends Service implements TypertGateway {
     }
     let source: unknown
     try {
-      source = Reflect.apply(prepared.method, prepared.receiver, prepared.args) as unknown
+      source = prepared.call()
     } catch (error) {
       await prepared.invocation.close()
       if (prepared.invocation.signal.aborted) throw remoteCancelled(prepared.endpoint, error)
@@ -782,16 +794,14 @@ export class TypertGatewayService extends Service implements TypertGateway {
     const descriptor = this.resolveDescriptor(request.namespace, request.method, endpoint)
     assertExactArguments(request.args, descriptor, endpoint)
     const validated = validateArguments(descriptor, request.args, endpoint)
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- other packages merge non-owner kinds into PrincipalMap.
+    const resources = this.forwarders.size === 0 && request.peer.principal.kind === 'owner' ? undefined : callResources(
+      this.ctx.typert, this.resourceReaders(descriptor), descriptor, validated,
+      request.signal ?? NEVER_ABORTED_SIGNAL,
+    )
     // Access precedes lookup resolution, so a refused call activates nothing.
     // oxlint-disable-next-line typescript/no-unnecessary-condition -- other packages merge non-owner kinds into PrincipalMap.
     if (request.peer.principal.kind !== 'owner') {
-      const resources = callResources(
-        this.ctx.typert,
-        this.resourceReaders(descriptor),
-        descriptor,
-        validated,
-        request.signal ?? NEVER_ABORTED_SIGNAL,
-      )
       const decision: RemoteAccessDecision = resources === undefined
         ? { kind: 'deny', reason: 'resource-invalid' }
         : this.ctx.remoteAccess.decide({
@@ -807,18 +817,6 @@ export class TypertGatewayService extends Service implements TypertGateway {
         })
       }
     }
-    const receiverContext = await this.resolveReceiverContext(descriptor, validated, endpoint)
-    const receiver: unknown = receiverContext.get(descriptor.service)
-    if (!isObject(receiver)) {
-      throw new TypertGatewayError(
-        'gateway/service-unavailable',
-        endpoint,
-        `active Service ${JSON.stringify(descriptor.service)} is unavailable`,
-      )
-    }
-    validateBinding(receiver, descriptor.service, descriptor.namespace, endpoint)
-    const args = await Promise.all(descriptor.parameters.map(parameter =>
-      this.resolveParameter(parameter, validated, endpoint)))
     const signal = methodSignal(request, control, descriptor.mode === 'stream')
     const invocation = new GatewayInvocation(
       { namespace: request.namespace, method: request.method, args: request.args },
@@ -833,6 +831,35 @@ export class TypertGatewayService extends Service implements TypertGateway {
         abort: (reason) => { control.abort(reason) },
       },
     )
+    if (resources !== undefined) {
+      for (const forwarder of this.forwarders) {
+        const target = forwarder(resources)
+        if (target === undefined) continue
+        // oxlint-disable-next-line typescript/no-unnecessary-condition -- other packages merge non-owner kinds into PrincipalMap.
+        if (request.peer.principal.kind !== 'owner') {
+          throw new RemoteError('remote-access/denied', 'Forwarding requires the Host owner', {
+            action: endpoint, reason: 'forwarded-principal-unsupported',
+          })
+        }
+        if (descriptor.uplink !== undefined) {
+          throw new TypertGatewayError('gateway/signature-invalid', endpoint, 'forwarded uplink streams are unsupported')
+        }
+        return { endpoint, descriptor, invocation, call: () => descriptor.mode === 'stream'
+          ? target.stream(endpoint, { args: request.args }, signal)
+          : target.invoke(endpoint, request.args, signal) }
+      }
+    }
+    const receiverContext = await this.resolveReceiverContext(descriptor, validated, endpoint)
+    const receiver: unknown = receiverContext.get(descriptor.service)
+    if (!isObject(receiver)) {
+      throw new TypertGatewayError(
+        'gateway/service-unavailable', endpoint,
+        `active Service ${JSON.stringify(descriptor.service)} is unavailable`,
+      )
+    }
+    validateBinding(receiver, descriptor.service, descriptor.namespace, endpoint)
+    const args = await Promise.all(descriptor.parameters.map(parameter =>
+      this.resolveParameter(parameter, validated, endpoint)))
     if (descriptor.cancellation !== undefined) args.push(signal)
     // The method runs on a Service view bound to a Context carrying this call:
     // Cordis rebinds `this.ctx` to the accessing Context, so `this.ctx.invocation`
@@ -851,9 +878,7 @@ export class TypertGatewayService extends Service implements TypertGateway {
     return {
       endpoint,
       descriptor,
-      receiver: callReceiver,
-      args,
-      method: method as (...args: never[]) => unknown,
+      call: () => { const value: unknown = Reflect.apply(method, callReceiver, args); return value },
       invocation,
     }
   }

@@ -222,6 +222,7 @@ export class CommandUiRuntime extends Service implements CommandUiContract {
    * shared name-and-label ranking for a typed one.
    */
   private async candidates(session: ClientSessionContext, req: CandidateRequest): Promise<readonly InputTriggerCandidate[]> {
+    if (/[\\/]/u.test(req.query)) return []
     const list = await this.directory.ensureReady(session.sessionId, req.signal)
     const rows: InputTriggerCandidate[] = []
     const seen = new Set<string>()
@@ -283,12 +284,28 @@ export class CommandUiRuntime extends Service implements CommandUiContract {
 
   /**
    * Restore column: the space column's answer once the session's catalog is
-   * ready (a warmup failure rejects). It only resolves; nothing is invoked or
+   * ready. Unknown tokens remain text when warmup fails. Nothing is invoked or
    * executed.
    */
   private async matchClaim(session: ClientSessionContext, token: string, signal: AbortSignal): Promise<CommandClaim | undefined> {
-    await this.directory.ensureReady(session.sessionId, signal)
+    if (!token.startsWith('/') || !await this.readyForToken(session, token.slice(1), signal)) return undefined
     return this.claimOf(session, token)
+  }
+
+  /** Ordinary paths bypass the command catalog; a failed lookup only blocks a previously known command. */
+  private async readyForToken(session: ClientSessionContext, name: string, signal: AbortSignal): Promise<boolean> {
+    signal.throwIfAborted()
+    if (name === '' || /[\\/]/u.test(name)) return false
+    try {
+      await this.directory.ensureReady(session.sessionId, signal)
+      return true
+    } catch (error: unknown) {
+      signal.throwIfAborted()
+      if (this.directory.recognizes(session.sessionId, name)) {
+        throw new Error(this.t('notice.directoryUnavailable'), { cause: error })
+      }
+      return false
+    }
   }
 
   /** The host leadingInput claim a token names in the hot catalog; popup and action kinds never claim. */
@@ -301,8 +318,8 @@ export class CommandUiRuntime extends Service implements CommandUiContract {
   }
 
   /**
-   * Decision table, enter column. Strong-waits the session's catalog (a
-   * warmup failure rejects — never a silent downgrade). Contributions and
+   * Decision table, enter column. Paths and unrecognized tokens remain text
+   * when the catalog is unavailable. Previously known commands keep the draft and report a retryable error. Contributions and
    * bare host commands act on the bare token only; leadingInput claims
    * args-tolerant.
    *
@@ -339,7 +356,7 @@ export class CommandUiRuntime extends Service implements CommandUiContract {
       this.invoke(typedName, contribution.ui, session, { via: 'enter', token })
       return 'handled'
     }
-    await this.directory.ensureReady(session.sessionId, signal)
+    if (!await this.readyForToken(session, typedName, signal)) return undefined
     const desc = this.directory.resolve(session.sessionId, typedName)
     if (desc === undefined) return undefined
     const name = desc.name

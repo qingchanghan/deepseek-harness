@@ -301,6 +301,7 @@ class JsonlSessionPersistence extends SessionPersistence {
    */
   private readonly listLimit: LimitFunction
   private rootEncodingCheck: Promise<void> | undefined
+  private rootObserved = false
   private readonly generationFormat: Omit<JsonlGenerationFormatAdapter, 'createRestore'>
   /**
    * Bounded LRU of parsed, validated stored logs keyed by session id and
@@ -492,7 +493,10 @@ class JsonlSessionPersistence extends SessionPersistence {
       return { header: pending.header, revision: pending.revision }
     }
     const selected = await this.findLog(id, options?.signal)
-    if (selected === undefined) return undefined
+    if (selected === undefined) {
+      this.ctx.logger.warn(`${this.name}: session "${id}" was not found under "${this.root}"; verify the Session id and storage root`)
+      return undefined
+    }
     const metadata = await this.readGenerationHeader(selected, id, options?.signal)
     if (metadata === undefined) return undefined
     try {
@@ -507,7 +511,7 @@ class JsonlSessionPersistence extends SessionPersistence {
       }
     } catch (error: unknown) {
       options?.signal?.throwIfAborted()
-      if (isENOENT(error)) return undefined
+      this.ctx.logger.warn(`${this.name}: cannot stat selected session "${id}" at "${selected.sourcePath}": ${String(error)}`)
       throw error
     }
   }
@@ -1180,16 +1184,16 @@ class JsonlSessionPersistence extends SessionPersistence {
         : await this.readFirstLine(selected.sourcePath, signal)
     } catch (error: unknown) {
       signal?.throwIfAborted()
-      if (isENOENT(error)) return undefined
+      this.ctx.logger.warn(`${this.name}: cannot read selected Session header at "${selected.sourcePath}": ${String(error)}`)
       throw error
     }
     signal?.throwIfAborted()
-    if (first === undefined) return undefined
+    if (first === undefined) throw this.invalidHeader(selected.sourcePath, 'header is empty')
     let value: unknown
     try {
       value = JSON.parse(first)
-    } catch {
-      return undefined
+    } catch (error: unknown) {
+      throw this.invalidHeader(selected.sourcePath, 'header is not valid JSON', error)
     }
     assertNoRetiredHeaderFields(value)
     const result = sessionFormatCatalog.readHeader(value)
@@ -1211,7 +1215,7 @@ class JsonlSessionPersistence extends SessionPersistence {
         { kind: 'jsonl', path: selected.sourcePath },
       )
     }
-    if (result.status === 'malformed') return undefined
+    if (result.status === 'malformed') throw this.invalidHeader(selected.sourcePath, 'header fields are invalid')
     const header = this.currentHeader(result.header)
     await this.assertStoredIdentity(
       selected.sourcePath,
@@ -1224,6 +1228,13 @@ class JsonlSessionPersistence extends SessionPersistence {
       header,
       formatStatus: result.status,
     }
+  }
+
+  /** A selected artifact exists but cannot identify a readable Session. */
+  private invalidHeader(path: string, reason: string, cause?: unknown): SessionPersistenceCorruptionError {
+    const error = new SessionPersistenceCorruptionError(`invalid Session header at "${path}": ${reason}`, { cause })
+    this.ctx.logger.warn(`${this.name}: ${error.message}`)
+    return error
   }
 
   /** Convert format-catalog string identities to current branded Session metadata. */
@@ -1276,6 +1287,7 @@ class JsonlSessionPersistence extends SessionPersistence {
     } else {
       await this.materializePosix(project, dir, finalPath, meta.id, content)
     }
+    this.rootObserved = true
   }
 
   /* v8 ignore start -- Windows uses the Win32 durable-publish path; POSIX coverage exercises this peer. */
@@ -1591,6 +1603,7 @@ class JsonlSessionPersistence extends SessionPersistence {
   private assertUsableRoot(): void {
     try {
       readdirSync(this.root)
+      this.rootObserved = true
     } catch (error) {
       if (isENOENT(error)) return
       throw error
@@ -1670,11 +1683,14 @@ class JsonlSessionPersistence extends SessionPersistence {
     try {
       signal?.throwIfAborted()
       const entries = await readdir(this.root, { withFileTypes: true })
+      this.rootObserved = true
       signal?.throwIfAborted()
       return entries.filter(e => e.isDirectory()).map(e => join(this.root, e.name))
     } catch (error) {
-      // Only an absent root means no sessions; rethrow every other I/O failure.
-      if (isENOENT(error)) return []
+      signal?.throwIfAborted()
+      // A fresh installation may not have materialized storage; an observed root cannot disappear silently.
+      if (isENOENT(error) && !this.rootObserved) return []
+      this.ctx.logger.warn(`${this.name}: cannot list Session storage root "${this.root}": ${String(error)}`)
       throw error
     }
   }

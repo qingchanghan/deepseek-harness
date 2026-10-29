@@ -432,10 +432,44 @@ type TypertGatewayErrorCode =
 ```
 
 ```ts type-equiv
+/** Transport selected for resources owned by another Host; calls retain named wire arguments. */
+interface TypertRemoteTarget {
+  /**
+   * Invoke a unary method with caller cancellation.
+   * @param endpoint - canonical namespace/method name.
+   * @param args - named wire arguments before local lookup.
+   * @param signal - caller lifetime.
+   * @returns the remote result.
+   */
+  invoke(endpoint: string, args: object, signal?: AbortSignal): Promise<unknown>
+  /**
+   * Open a downlink stream with caller cancellation.
+   * @param endpoint - canonical namespace/method name.
+   * @param payload - stream request envelope containing named arguments.
+   * @param signal - caller lifetime.
+   * @returns the remote downlink values.
+   */
+  stream(endpoint: string, payload: unknown, signal?: AbortSignal): AsyncIterable<unknown>
+}
+```
+
+```ts type-equiv
+/** Resolve an authorized call's resources before any local lookup or Agent activation. */
+type TypertRemoteForwarder = (resources: readonly RemoteAccessResource[]) => TypertRemoteTarget | undefined
+```
+
+```ts type-equiv
 /** Host dispatcher consumed by Connection adapters. */
 interface TypertGateway {
   /** Carrier adapter shared by WebSocket and in-process transports. */
   readonly wireStream: TypertGatewayWireStream
+  /**
+   * Register resource routing for owner calls. Forwarded calls use the target's owner credentials;
+   * non-owner calls and uplink streams are refused instead of changing their identity or dropping input.
+   * @param forwarder - resource owner resolver; undefined delegates to the next resolver or local dispatch.
+   * @returns disposer that removes this resolver.
+   */
+  registerForwarder(forwarder: TypertRemoteForwarder): () => void
   /**
    * Check for an active owner Client event stream, the only kind that can answer forwarded waterfalls.
    * @returns whether an owner stream is open and has not been cancelled.
@@ -677,6 +711,13 @@ registerRemoteEvents( source: TypertRemoteEventSource, host: RemoteEventHostInfo
  * @throws {@link TypertGatewayError} for dispatch, provider, or boundary failures; lookup-policy and business errors retain identity.
  */
 async invoke(request: InvokeRemoteRequest): Promise<unknown>
+
+/**
+ * Register routing after argument validation and access checks, before local resolution.
+ * @param forwarder - resource owner resolver.
+ * @returns disposer for this registration.
+ */
+registerForwarder(forwarder: TypertRemoteForwarder): () => void
 
 /**
  * Open one live stream Remote method without assuming a physical carrier.

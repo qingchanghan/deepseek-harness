@@ -32,6 +32,8 @@ Changed-file and delivery entry cards and hover previews follow the [R16 preview
 <a id="explicit-deliveries"></a>
 ### Explicit deliveries
 
+Each file card offers Copy file path alongside Sidebar preview. Copy uses the complete workspace-resolved path. Remote files are read from their Session Host and do not offer local desktop open or reveal actions.
+
 The `present` tool's preparing stage is one non-expandable document-icon row. It does not show filenames, create delivery cards, or enable file actions before the recorded call supplies arguments.
 
 The Web `standard`, `ptc`, and `cordis` presets expose `present` for final files accessible through the Session filesystem, including files created through Bash. Call it with `files: [{ path, description? }]` after creating the files. The [present tool](../../deliverables/tool-present/README.md) owns file-count limits and Session declarations. A single delivery fills the row; multiple deliveries form a two-column grid, collapsed after four files. Cards show the basename, description or file type, and a shared native opening control. Delivery and changed-file icon tiles use white at 50% opacity in the light theme and 5% in the dark theme. Icon tiles and single-file changed cards use the same border as delivery cards. Clicking the card previews the file in the right Sidebar. The control opens the default application and lists associated applications, with file reveal last. Matching inline-code references also open Sidebar previews. Duplicate declarations use the last description before the closing reply.

@@ -724,6 +724,36 @@ describe('JsonlSessionPersistence: immutable format generations', () => {
 
   afterEach(async () => { await ctx.fiber.dispose() })
 
+  it('reports a vanished readable storage root as an I/O failure', async () => {
+    const warning = vi.spyOn(ctx.logger, 'warn').mockImplementation(() => {})
+    readdirFailure.path = root
+    readdirFailure.error = Object.assign(new Error('root disappeared'), { code: 'ENOENT' })
+    await expect(ctx.sessionPersistence.stat(SessionId('existing-session'))).rejects.toMatchObject({ code: 'ENOENT' })
+    expect(warning).toHaveBeenCalledWith(expect.stringContaining(root))
+  })
+
+  it('distinguishes a fresh missing root from losing a root created by the first write', async () => {
+    const fresh = new Context()
+    const nestedRoot = join(root, 'not-yet-created')
+    await fresh.plugin(JsonlSessionPersistence, { root: nestedRoot, compression: 'none' })
+    const header = meta('newly-materialized', '/work')
+    try {
+      expect(await fresh.sessionPersistence.list()).toEqual([])
+      await writeLog(fresh.sessionPersistence, header, oneTurnLog())
+      await rm(nestedRoot, { recursive: true })
+      await expect(fresh.sessionPersistence.stat(header.id)).rejects.toMatchObject({ code: 'ENOENT' })
+    } finally { await fresh.fiber.dispose() }
+  })
+
+  it.each(['', '{broken\n', 'null\n'])('reports an unreadable selected header as corruption instead of absence: %j', async (content) => {
+    const header = meta('invalid-selected-header', '/work')
+    const path = rawLogPath(root, header.cwd, header.id)
+    await mkdir(dirname(path), { recursive: true })
+    await writeFile(path, content)
+    await expect(ctx.sessionPersistence.stat(header.id)).rejects.toMatchObject({ name: 'SessionPersistenceCorruptionError' })
+    expect(await ctx.sessionPersistence.list()).toEqual([])
+  })
+
   it.each([3, SESSION_FORMAT_VERSION])('shares deeply frozen opaque JSON from format v%s', async (version) => {
     type NestedValue = {
       values: [null, boolean, number, string, unknown[]]
@@ -1908,7 +1938,7 @@ describe('JsonlSessionPersistence: durability and crash semantics', () => {
     }
   })
 
-  it('stat handles artifact removal and non-ENOENT failures after log discovery', async () => {
+  it('stat surfaces artifact removal and other failures after log discovery', async () => {
     const m = meta('stored-revision-race')
     await writeLog(ctx.sessionPersistence, m, oneTurnLog())
     const persistence = ctx.sessionPersistence
@@ -1928,7 +1958,7 @@ describe('JsonlSessionPersistence: durability and crash semantics', () => {
     const findLog = vi.spyOn(internals, 'findLog').mockResolvedValue(selected)
 
     await rm(path)
-    expect(await persistence.stat(m.id)).toBeUndefined()
+    await expect(persistence.stat(m.id)).rejects.toMatchObject({ code: 'ENOENT' })
 
     const invalidPath = `${path}\0`
     findLog.mockResolvedValue({ ...selected, sourcePath: invalidPath, currentPath: invalidPath })
@@ -1945,14 +1975,14 @@ describe('JsonlSessionPersistence: durability and crash semantics', () => {
     await expect(persistence.stat(m.id, { signal: controller.signal })).rejects.toBe(reason)
   })
 
-  it('stat reports absence for an artifact vanishing before its identity stat and surfaces other faults', async () => {
+  it('stat surfaces an artifact vanishing before its identity stat and other storage faults', async () => {
     const m = meta('stat-fault', '/work')
     await writeLog(ctx.sessionPersistence, m, oneTurnLog())
     // The header read succeeds; the identity stat then loses the file (a
     // concurrent removal) or hits a storage fault.
     statFailure.path = rawLogPath(root, '/work', m.id)
     statFailure.error = Object.assign(new Error('ENOENT: vanished'), { code: 'ENOENT' })
-    expect(await ctx.sessionPersistence.stat(m.id)).toBeUndefined()
+    await expect(ctx.sessionPersistence.stat(m.id)).rejects.toBe(statFailure.error)
     statFailure.error = Object.assign(new Error('EACCES: denied'), { code: 'EACCES' })
     await expect(ctx.sessionPersistence.stat(m.id)).rejects.toThrow(/EACCES/)
   })

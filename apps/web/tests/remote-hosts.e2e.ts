@@ -5,7 +5,8 @@ import { delimiter, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { chromium, type Browser, type Page } from 'playwright'
 import { writeComposerDraft, saveFailureShot } from './support.ts'
-import type { SessionId } from '@deepseek-ai/dsh-session/types'
+import { SESSION_FORMAT_VERSION, Session, SessionId } from '@deepseek-ai/dsh-session'
+import { ToolCallId, createAssistantMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
 import {
   assertFixtureInventory, captureStableAria, compareOrRefreshGolden, launchWebScaffold,
@@ -15,6 +16,23 @@ import {
 const SNAPSHOT_DIR = fileURLToPath(new URL('../../../snapshots/web/remote-hosts', import.meta.url))
 const MODE = webSnapshotMode()
 const SEED = fileURLToPath(new URL('../../../snapshots/web/lifecycle-chrome/session.v4.jsonl', import.meta.url))
+const INTERACTION_EXPECTED = fileURLToPath(new URL('./expected/remote-session-tools', import.meta.url))
+
+/** Settled output owned by the remote Host, including its durable file declaration. */
+function remoteFileFixture(): string {
+  const session = Session.create(SessionId('remote-file-source'))
+  session.append('turn/start', { turn: 1 })
+  session.append('user/message', createUserMessage({ content: [{ type: 'text', text: 'Write a report' }], source: { kind: 'user' } }), { surfaceOp: 'append' })
+  session.append('step/start', { turn: 1, step: 1 })
+  session.append('deliverables/presented', { turn: 1, callId: ToolCallId('remote-present'), files: [{ path: 'remote-report.txt' }, { path: 'remote-report.html' }] })
+  session.append('assistant/message', { turn: 1, step: 1, stream: [], message: createAssistantMessage({
+    content: [{ type: 'text', text: 'Created `remote-report.txt`.' }], source: { provider: 'deepseek-official', model: 'deepseek-v4-flash' },
+  }) }, { surfaceOp: 'append' })
+  session.append('step/end', { turn: 1, step: 1 })
+  session.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
+  return [JSON.stringify({ type: 'session', version: SESSION_FORMAT_VERSION, id: '{{sessionId}}', createdAt: 0,
+    cwd: '{{cwd}}', isSeeded: false, delegationDepth: 0 }), ...session.snapshotEvents().map(event => JSON.stringify({ ...event, time: event.seq })), ''].join('\n')
+}
 
 // The SSH process fixture uses a POSIX executable; Windows retains its native transport lane.
 describe.skipIf(process.platform === 'win32' || MODE === 'record')('web e2e: SSH remote hosts', () => {
@@ -29,6 +47,7 @@ describe.skipIf(process.platform === 'win32' || MODE === 'record')('web e2e: SSH
   const previousDescriptor = process.env.DSH_REMOTE_HOST_FIXTURE
 
   beforeAll(async () => {
+    if (MODE === 'refresh') await mkdir(INTERACTION_EXPECTED, { recursive: true })
     scratch = await mkdtemp(join(tmpdir(), 'dsh-remote-hosts-e2e-'))
     remote = await launchWebScaffold({ replayFixture: SEED, compareReplaySession: false })
     const seed = await selectedSessionFixture(SEED, false)
@@ -51,7 +70,7 @@ describe.skipIf(process.platform === 'win32' || MODE === 'record')('web e2e: SSH
     await symlink('ssh.mjs', join(bin, 'ssh'))
     process.env.PATH = `${bin}${delimiter}${previousPath ?? ''}`
     process.env.DSH_REMOTE_HOST_FIXTURE = descriptor
-    local = await launchWebScaffold({ profile: { packages: [] } })
+    local = await launchWebScaffold({ developerTools: true, profile: { packages: [] } })
     expect(local.ctx.remoteHosts.describe().writable).toBe(true)
     browser = await chromium.launch()
     page = await browser.newPage({ viewport: { width: 1280, height: 900 }, locale: 'zh-CN', timezoneId: 'UTC' })
@@ -101,6 +120,8 @@ describe.skipIf(process.platform === 'win32' || MODE === 'record')('web e2e: SSH
     await expect.poll(() => host.getByRole('button', { name: /^Recorded remote Session/ }).count()).toBe(0)
     const sidebar = page.locator('[data-sidebar-hosts]')
     await expect.poll(() => sidebar.getByRole('status').getAttribute('aria-label')).toBe('未连接')
+    await expect(local.ctx.sessionController.rename({ sessionId: remoteSessionId, title: 'Must not run locally' }))
+      .rejects.toMatchObject({ code: 'remote-hosts/not-connected' })
     expect(await sidebar.getByRole('treeitem', { name: /^Recorded remote Session/ }).count()).toBe(0)
     await host.getByRole('button', { name: '连接', exact: true }).click()
     await host.getByRole('button', { name: /^Recorded remote Session/ }).waitFor()
@@ -169,7 +190,9 @@ describe.skipIf(process.platform === 'win32' || MODE === 'record')('web e2e: SSH
     await dialog.getByRole('button', { name: '创建会话', exact: true }).click()
     await dialog.waitFor({ state: 'hidden' })
     const input = page.locator('[data-composer-input]').first()
-    await writeComposerDraft(page, input, 'Reply with the single word LIGHTHOUSE and stop.')
+    await writeComposerDraft(page, input, '/go')
+    await page.getByRole('listbox').getByRole('option').first().waitFor()
+    await writeComposerDraft(page, input, '/data/report.md Reply with the single word LIGHTHOUSE and stop.')
     const settled = remote.whenTurnSettled()
     await input.press('Enter')
     const created = await settled
@@ -191,6 +214,70 @@ describe.skipIf(process.platform === 'win32' || MODE === 'record')('web e2e: SSH
     await page.reload({ waitUntil: 'load' })
     await page.getByText('LIGHTHOUSE', { exact: true }).waitFor()
     await row.waitFor()
+    expect(tripwire.pageErrors).toEqual([])
+  })
+
+  it('updates a remote queued message to steering while its turn is running', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-remote-steering'))
+    const input = page.locator('[data-composer-input]').first()
+    const hold = Promise.withResolvers<undefined>()
+    let entered = false
+    const stopHolding = remote.ctx.on('agent/pre-step', async (payload, next) => {
+      if (payload.messages.some(message => message.content.some(block => block.type === 'text' && block.text === 'Hold for remote steering'))) {
+        entered = true
+        await hold.promise
+        payload.signal.throwIfAborted()
+      }
+      return next()
+    })
+    try {
+      await writeComposerDraft(page, input, 'Hold for remote steering')
+      await input.press('Enter')
+      await expect.poll(() => entered).toBe(true)
+      await page.getByRole('button', { name: '停止生成', exact: true }).waitFor()
+      await writeComposerDraft(page, input, 'REMOTE_STEERING_FOLLOWUP')
+      await page.getByRole('button', { name: '排队发送', exact: true }).click()
+      const row = page.locator('[data-queue-dock] li').filter({ hasText: 'REMOTE_STEERING_FOLLOWUP' })
+      await row.waitFor()
+      await compareOrRefreshGolden(join(INTERACTION_EXPECTED, 'queue.expected.md'),
+        await captureStableAria(page, '[data-queue-dock]', remote.workspaceCwd), MODE)
+      await row.getByRole('button', { name: '插话发送', exact: true }).click()
+      await row.waitFor({ state: 'detached' })
+      await page.locator('[data-pending-steering]').filter({ hasText: 'REMOTE_STEERING_FOLLOWUP' }).waitFor()
+      await compareOrRefreshGolden(join(INTERACTION_EXPECTED, 'steering.expected.md'),
+        await captureStableAria(page, '[data-pending-steering]', remote.workspaceCwd), MODE)
+    } finally {
+      try { await page.getByRole('button', { name: '停止生成', exact: true }).click() } finally {
+        hold.resolve(undefined)
+        stopHolding()
+      }
+      await page.getByRole('button', { name: '停止生成', exact: true }).waitFor({ state: 'hidden' })
+    }
+  })
+
+  it('previews a remote output and copies its absolute path from the card and preview', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-remote-file'))
+    const path = join(remote.workspaceCwd, 'remote-report.txt')
+    await writeFile(path, 'REMOTE_FILE_PREVIEW_OK\nOnly the remote Host owns this file.\n')
+    await writeFile(join(remote.workspaceCwd, 'remote-report.html'), '<!doctype html><h1>REMOTE_BINARY_PREVIEW_OK</h1>')
+    const id = await seedSession(remote, remoteFileFixture(), 'remote-file-session')
+    await remote.ctx.sessionController.rename({ sessionId: id, title: 'Remote file output' })
+    await page.reload({ waitUntil: 'load' })
+    await page.locator('[data-sidebar-hosts]').getByRole('treeitem', { name: /^Remote file output/ }).click()
+    await page.context().grantPermissions(['clipboard-read', 'clipboard-write'])
+    const card = page.locator('[data-presented-file]').filter({ hasText: 'remote-report.txt' })
+    await card.getByRole('button', { name: '复制文件路径', exact: true }).click()
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(path)
+    await card.getByRole('button', { name: '在侧边栏预览 remote-report.txt', exact: true }).click()
+    const preview = page.locator('[data-textpreview-state="text"]')
+    await preview.getByText('REMOTE_FILE_PREVIEW_OK', { exact: true }).waitFor()
+    await preview.getByRole('button', { name: '复制文件路径', exact: true }).click()
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(path)
+    await compareOrRefreshGolden(join(INTERACTION_EXPECTED, 'file.expected.md'),
+      await captureStableAria(page, '[data-textpreview-state="text"]', remote.workspaceCwd), MODE)
+    await page.getByRole('button', { name: '在侧边栏预览 remote-report.html', exact: true }).click()
+    await page.frameLocator('[data-html-preview]').getByRole('heading', { name: 'REMOTE_BINARY_PREVIEW_OK' }).waitFor()
+    expect(local.ctx.sessions.get(id)).toBeUndefined()
     expect(tripwire.pageErrors).toEqual([])
   })
 

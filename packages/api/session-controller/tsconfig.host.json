@@ -21,7 +21,8 @@
     "src/model-selection-projection.ts",
     "src/archived-session-gate.ts",
     "src/skill-catalog.ts",
-    "src/remote-hosts.ts"
+    "src/remote-hosts.ts",
+    "src/remote-control.ts"
   ],
   "references": [
     {

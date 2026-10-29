@@ -1,0 +1,6 @@
+- list:
+  - listitem:
+    - text: REMOTE_STEERING_FOLLOWUP
+    - button "编辑排队消息"
+    - button "删除排队消息"
+    - button "插话发送"

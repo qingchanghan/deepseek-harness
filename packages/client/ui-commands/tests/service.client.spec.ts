@@ -724,11 +724,29 @@ describe('matchEnter (enter column)', () => {
     expect(outcome.claim.token).toBe('/goal ')
   })
 
-  it('rejects when warmup fails (never a silent downgrade)', async () => {
-    const { source } = await bench({
-      commands: () => Promise.reject(new Error('warmup boom')),
+  it('submits unknown slash text when the command catalog is unavailable, but bypasses lookup for paths', async () => {
+    const { source, listCalls, executeCalls } = await bench({
+      commands: () => Promise.reject(new Error('session/not-found')),
     })
-    await expect(source.matchEnter!(proj('s1'), '/goal', signal(), { attachments: 0 })).rejects.toThrow('warmup boom')
+    for (const path of ['/data/shiyuan/file.md', '  /data/with spaces.txt', '/tmp\\file']) {
+      await expect(source.matchEnter!(proj('s1'), path, signal(), { attachments: 0 })).resolves.toBeUndefined()
+    }
+    expect(listCalls).toEqual([])
+    await expect(source.matchEnter!(proj('s1'), '/data', signal(), { attachments: 0 })).resolves.toBeUndefined()
+    expect(executeCalls).toEqual([])
+  })
+
+  it('keeps a previously known command in the draft with localized retry feedback after refresh fails', async () => {
+    let failed = false
+    const { source, warm, remote } = await bench({ commands: () => failed
+      ? Promise.reject(new Error('session/not-found')) : Promise.resolve({ commands: S1_CMDS }) })
+    await warm(proj('s1'))
+    failed = true
+    remote.emit('commands/change', [])
+    await vi.waitFor(() => { expect(source.matchSpace!(proj('s1'), '/goal')).toBeUndefined() })
+    await expect(source.candidates(proj('s1'), req(''))).rejects.toThrow('session/not-found')
+    await expect(source.matchEnter!(proj('s1'), '/goal', signal(), { attachments: 0 })).rejects.toThrow('command:notice.directoryUnavailable')
+    await expect(source.matchClaim!(proj('s1'), '/goal', signal())).rejects.toThrow('command:notice.directoryUnavailable')
   })
 
   it('matchClaim waits for a cold catalog and answers only the space column claim without acting', async () => {
@@ -752,11 +770,11 @@ describe('matchEnter (enter column)', () => {
     expect(executeCalls).toEqual([])
   })
 
-  it('matchClaim rejects when warmup fails', async () => {
+  it('restores an unrecognized slash token as ordinary text when warmup fails', async () => {
     const { source } = await bench({
       commands: () => Promise.reject(new Error('warmup boom')),
     })
-    await expect(source.matchClaim!(proj('s1'), '/goal', signal())).rejects.toThrow('warmup boom')
+    await expect(source.matchClaim!(proj('s1'), '/goal', signal())).resolves.toBeUndefined()
   })
 
   it('leadingInput claims args-tolerant (bare and with trailing text)', async () => {
