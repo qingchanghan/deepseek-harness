@@ -27,7 +27,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-已连接的远程会话通过所属 Host 执行会话操作、命令目录查询和文件读取。控制流先合并 Local 与已连接 Host 的基线，再转发排队、steering（中途引导）、Goal 和待办事项的实时更新；连接变化会重启控制流。已知所属 Host 断开时返回重连错误，不会激活同标识的本机 agent。
+已连接的远程会话通过所属 Host 执行会话操作、命令目录查询和文件读取。控制流先合并 Local 与已连接 Host 的基线，再转发排队、steering（中途引导）、Goal 和待办事项的实时更新；连接变化会替换控制流，包括此前因传输错误而终止的流。远程目录恢复后，保留的普通和子会话日志会在远程传输错误后重新打开。业务与协议错误继续显示，尚未确认的写操作不会重发。已知所属 Host 断开时返回重连错误，不会激活同标识的本机 agent。
 
 历史页与 follow opening 快照为每个持久 Session 事件携带一条 `{ type: 'event', event: SessionWireEvent }` record。Client 把每条已接受 record 保留为一个持久 `SessionEventLikeEntry`；Assistant token 边界保留在 `assistant/message` 或 `assistant/attempt` 的紧凑流内。工具参数、结果内容、失败信息和 `tool/result.data.meta` 原样通过；控制器不解析工具定义、不运行展示转换器，也不附加 UI 数据。
 

@@ -61,6 +61,8 @@ export interface RemoteHostStatus extends RemoteHostEntry {
   readonly error?: string
   /** Remote process id of the attached Web instance. */
   readonly pid?: number
+  /** Epoch milliseconds of a scheduled automatic retry; omitted while stopped or connecting. */
+  readonly retryAt?: number
 }
 
 /** Configured connections and their current edit revision. */
@@ -93,6 +95,12 @@ declare module '@deepseek-ai/cordis' {
 
 declare module '@deepseek-ai/dsh-typert-protocol' {
   interface RemoteErrorDetailsMap {
+    /** The attached Host's stream connection ended. */
+    'remote-host/closed': Record<string, never>
+    /** The attached Host did not answer its heartbeat before the deadline. */
+    'remote-host/timeout': Record<string, never>
+    /** The attached Host's network transport failed. */
+    'remote-host/unreachable': Record<string, never>
     /** A connection edit could not be validated or persisted. */
     'remote-hosts/configuration-rejected': { readonly reason: string }
     /** Connection settings changed after the editor read them. */

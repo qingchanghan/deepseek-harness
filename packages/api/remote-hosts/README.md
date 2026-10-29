@@ -35,12 +35,13 @@ Mount the row in a Web profile and list the development machines it may attach t
         name: H20-141-sy
         sshTarget: H20-141-sy
     timeoutMs: 30000
+    heartbeatIntervalMs: 15000
     connectOnStart: true
 ```
 
-`sshTarget` is an existing OpenSSH destination; the service runs `ssh` with `BatchMode=yes` and never prompts or stores credentials. `retryDelayMs` and `maxRetryDelayMs` bound the doubling retry that starts a failed attachment again, because a development machine may start `dsh web` after this Host booted. `remoteHome` names the remote Harness home when it is not `$DSH_HOME` or `~/.dsh`. Each configured host attaches when the plugin activates, and `remote-hosts/changed` reports lifecycle changes.
+`sshTarget` is an existing OpenSSH destination; the service runs `ssh` with `BatchMode=yes` and never prompts or stores credentials. `retryDelayMs` (5 seconds by default) and `maxRetryDelayMs` (60 seconds) bound automatic retries after failed attachment or lost connectivity. Each attempt rediscovers the running instance, including its current port and launch token. The retry delay resets when the remote event stream announces readiness. `remoteHome` names the remote Harness home when it is not `$DSH_HOME` or `~/.dsh`. Each configured host attaches when the plugin activates, and `remote-hosts/changed` reports lifecycle changes.
 
-Open **Hosts** in the sidebar to add or edit connections, inspect failures, and reconnect. The page saves `hosts` in the active profile through revision-checked Settings writes. It keeps configured hosts visible while disconnected or empty; removing a connection preserves remote Sessions. SSH discovery, HTTP requests, and socket handshakes use `timeoutMs`; disconnect and plugin disposal cancel owned work and close the SSH forward.
+Open **Hosts** in the sidebar to add or edit connections, inspect failures, and reconnect. The page saves `hosts` in the active profile through revision-checked Settings writes. It keeps configured hosts visible while disconnected or empty; removing a connection preserves remote Sessions. SSH discovery, HTTP requests, socket handshakes, and heartbeat replies use `timeoutMs`. The client sends WebSocket probes at `heartbeatIntervalMs`; a missing reply, socket failure, or ended event stream triggers reconnection. Calls and prompts are never replayed automatically. Disconnect and plugin disposal cancel owned work, probes, and retries, and close the SSH forward.
 
 <a id="understand-the-implementation"></a>
 ## Understand the implementation
@@ -52,7 +53,7 @@ Attachment reads every `<remoteHome>/web-instances/*.json`, chooses the newest d
 
 Unary forwarding uses the shared Connection parser for JSON and multipart byte results, including file previews. Failures retain the remote code and details. The Session Controller combines remote control baselines and live projections with Local state, so remote queues and steering update without reopening the Session.
 
-`describe()` returns a `RemoteHostsSnapshot`: every `RemoteHostStatus` includes its configured connection fields, display name, lifecycle status, and optional error or process id; the snapshot also reports whether settings are writable and their revision. `setHosts(RemoteHostsUpdate)` accepts the complete connection list and `expectedRevision`; stale revisions fail without overwriting another edit. `reconnect(id)` and `disconnectHost(id)` return the same snapshot. Host consumers use `connected()` for `RemoteHostHandle` instances exposing `invoke(endpoint, args, signal?)` and `stream(endpoint, payload, signal?)`.
+`describe()` returns a `RemoteHostsSnapshot`: every `RemoteHostStatus` includes its configured connection fields, display name, lifecycle status, and optional error, process id, or `retryAt` (the next scheduled retry as epoch milliseconds); the snapshot also reports whether settings are writable and their revision. `setHosts(RemoteHostsUpdate)` accepts the complete connection list and `expectedRevision`; stale revisions fail without overwriting another edit. `reconnect(id)` and `disconnectHost(id)` return the same snapshot. Host consumers use `connected()` for `RemoteHostHandle` instances exposing `invoke(endpoint, args, signal?)` and `stream(endpoint, payload, signal?)`.
 
 `$events` emits are republished locally. Approval and question requests reach the local browser through the interaction bridge; requests without a local answerer delegate back to the remote chain. Connection changes invalidate the Session catalog so browsers read the current host membership.
 

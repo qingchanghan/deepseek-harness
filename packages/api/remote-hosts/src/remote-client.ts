@@ -52,8 +52,10 @@ export interface RemoteClientOptions {
   readonly baseUrl: string
   /** Process launch token, exchanged once for an authenticated API cookie. */
   readonly token: string
-  /** Deadline for one authentication, HTTP request, or socket handshake. */
+  /** Deadline for one authentication, HTTP request, socket handshake, or heartbeat reply. */
   readonly timeoutMs: number
+  /** Interval between socket liveness probes, in milliseconds. */
+  readonly heartbeatIntervalMs: number
   /** HTTP implementation; the Host passes the process `fetch`. */
   readonly fetch?: typeof fetch
 }
@@ -87,6 +89,9 @@ export class RemoteHostClient {
   private readonly token: string
   private readonly lifetime = new AbortController()
   private readonly timeoutMs: number
+  private readonly heartbeatIntervalMs: number
+  private heartbeat: NodeJS.Timeout | undefined
+  private pongDeadline: NodeJS.Timeout | undefined
   private readonly fetchImpl: typeof fetch
   private cookie: string | undefined
   private socket: WebSocket | undefined
@@ -102,11 +107,13 @@ export class RemoteHostClient {
     this.baseUrl = new URL(options.baseUrl)
     this.token = options.token
     this.timeoutMs = options.timeoutMs
+    this.heartbeatIntervalMs = options.heartbeatIntervalMs
     this.fetchImpl = options.fetch ?? fetch
   }
 
   /** Close the socket and fail every stream that is still open. */
   close(): void {
+    this.clearHeartbeat()
     this.lifetime.abort()
     const failure: RemoteWireFailure = {
       code: 'remote-host/closed',
@@ -245,12 +252,14 @@ export class RemoteHostClient {
 
   private async openMux(): Promise<WebSocket> {
     const cookie = await this.apiCookie(AbortSignal.any([this.lifetime.signal, AbortSignal.timeout(this.timeoutMs)]))
+    this.lifetime.signal.throwIfAborted()
     const url = new URL('/api/remote.mux', this.baseUrl)
     url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:'
     const socket = new WebSocket(url, { headers: { cookie }, handshakeTimeout: this.timeoutMs })
     this.socket = socket
     socket.on('message', (data: RawData) => { this.receive(data) })
     socket.on('close', () => {
+      this.clearHeartbeat()
       this.socket = undefined
       this.closed ??= {
         code: 'remote-host/closed',
@@ -261,16 +270,47 @@ export class RemoteHostClient {
       this.streams.clear()
     })
     socket.on('error', (error: Error) => {
+      this.clearHeartbeat()
       for (const awake of [...this.streams.values()]) {
         awake.fail({ code: 'remote-host/unreachable', message: error.message, details: {} })
       }
       this.streams.clear()
     })
+    socket.on('pong', () => {
+      if (this.pongDeadline === undefined) return
+      clearTimeout(this.pongDeadline)
+      this.pongDeadline = undefined
+      this.scheduleHeartbeat(socket)
+    })
     await new Promise<void>((resolve, reject) => {
       socket.once('open', resolve)
       socket.once('error', reject)
     })
+    this.scheduleHeartbeat(socket)
     return socket
+  }
+
+  private scheduleHeartbeat(socket: WebSocket): void {
+    if (this.closed !== undefined || socket.readyState !== WebSocket.OPEN) return
+    this.heartbeat = setTimeout(() => {
+      this.heartbeat = undefined
+      this.pongDeadline = setTimeout(() => {
+        this.pongDeadline = undefined
+        this.closed = { code: 'remote-host/timeout', message: 'The remote Host did not answer the connection heartbeat', details: {} }
+        this.failAll(this.closed)
+        socket.terminate()
+      }, this.timeoutMs)
+      this.pongDeadline.unref()
+      socket.ping()
+    }, this.heartbeatIntervalMs)
+    this.heartbeat.unref()
+  }
+
+  private clearHeartbeat(): void {
+    clearTimeout(this.heartbeat)
+    clearTimeout(this.pongDeadline)
+    this.heartbeat = undefined
+    this.pongDeadline = undefined
   }
 
   private receive(data: RawData): void {

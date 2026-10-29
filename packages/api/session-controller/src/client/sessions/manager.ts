@@ -465,6 +465,11 @@ export class SessionManager {
           for (const s of result.value.items) {
             if (s.projections !== undefined) this.applyListBlock(s.sessionId, s.projections)
           }
+          const availableRemote = new Set(result.value.items
+            .filter(summary => summary.host !== undefined).map(summary => summary.sessionId))
+          for (const [id, session] of this.sessions) {
+            if (availableRemote.has(this.addresses.get(id)?.parentSessionId ?? id)) session.resumeRemoteHost()
+          }
         } else {
           this.listState = 'error'
           this.listError = result.error

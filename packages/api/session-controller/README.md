@@ -27,7 +27,7 @@ Desktop analytics follows the [product collection policy](../../client/product-a
 <a id="use-this-package"></a>
 ## Use this package
 
-Attached Sessions use their owning Host for Session operations, command catalogs, and file reads. The control stream combines Local and connected-Host baselines before forwarding live queue, steering, Goal, and todo updates; a connection change restarts that stream. A disconnected known owner produces a reconnect error instead of activating a local Agent with the same identity.
+Attached Sessions use their owning Host for Session operations, command catalogs, and file reads. The control stream combines Local and connected-Host baselines before forwarding live queue, steering, Goal, and todo updates; a connection change replaces that stream, including after terminal transport failure. Once a remote catalog returns, retained ordinary and child Session journals reopen after remote transport errors. Business and protocol failures remain visible, and pending mutations are not replayed. A disconnected known owner produces a reconnect error instead of activating a local Agent with the same identity.
 
 History pages and follow opening snapshots carry one `{ type: 'event', event: SessionWireEvent }` record per durable Session event. The Client retains each accepted record as one durable `SessionEventLikeEntry`; Assistant token boundaries remain inside the compact stream on `assistant/message` or `assistant/attempt`. Tool arguments, result content, failures, and `tool/result.data.meta` pass through unchanged; the controller does not resolve a Tool definition, run a presenter, or attach UI data.
 

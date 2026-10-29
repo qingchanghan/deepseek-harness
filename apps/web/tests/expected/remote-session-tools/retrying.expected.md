@@ -1,0 +1,13 @@
+- region "Unavailable machine":
+  - heading "Unavailable machine" [level=2]
+  - text: SSH 远程会话
+  - status: 等待自动重连
+  - text: 0 个会话
+  - button "重新连接"
+  - button "停止重连"
+  - button "编辑"
+  - button "移除"
+  - paragraph: unreachable-fixture
+  - alert: "ssh unreachable-fixture exited with 255: fixture SSH connection refused"
+  - paragraph: 这台主机还没有可显示的会话
+  - list

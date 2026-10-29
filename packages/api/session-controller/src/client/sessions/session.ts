@@ -1,6 +1,7 @@
 // Sessions remain resident after creation so their open Remote sources keep running off-screen.
 
 import type { Context } from '@deepseek-ai/cordis'
+import type {} from '@deepseek-ai/dsh-api-remote-hosts/types'
 import type { InboxState, InboxTarget } from '@deepseek-ai/dsh-agent/types'
 import { randomUUID } from '@deepseek-ai/dsh-util-crypto'
 import type { AttachmentIdType, FileAttachmentRef, ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
@@ -400,6 +401,22 @@ export class Session implements SessionFace {
     })
     this.openPromise = promise
     return promise
+  }
+
+  /** Reopen a retained journal after its remote Host becomes available again; mutations are never replayed. */
+  resumeRemoteHost(): void {
+    if (this.openState !== 'error' || this.openError === null) return
+    switch (this.openError.code) {
+      case 'remote-host/closed':
+      case 'remote-host/timeout':
+      case 'remote-host/unreachable':
+      case 'remote-hosts/not-connected':
+        void this.open()
+        return
+      default:
+        // Other owners' business and protocol failures remain terminal.
+        return
+    }
   }
 
   /** Prepend one Turn-aligned page: at least 50 messages and two Turn starts, capped at 500 messages. */

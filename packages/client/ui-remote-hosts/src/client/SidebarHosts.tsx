@@ -28,7 +28,7 @@ export function SidebarHosts(props: SidebarHostsProps): ReactNode {
   const groups = hostGroups(list, t, state.catalog.hosts).filter(group => group.key !== '')
   return <div className={css.root} data-sidebar-hosts>
     {groups.map((group) => {
-      const status = group.host?.status ?? 'connected'
+      const status = group.host?.retryAt === undefined ? group.host?.status ?? 'connected' : 'retrying'
       return <details key={group.key} open className={css.group} data-sidebar-host={group.key}>
         <summary className={css.heading}>
           <span className={css.name} title={group.label}>{group.label}</span>

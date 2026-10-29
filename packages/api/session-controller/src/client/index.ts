@@ -125,20 +125,31 @@ export function apply(ctx: Context): void {
     sessions.handleSessionError(sessionId, message)
   })
 
-  const control = createSessionControlStream(remotes, {
+  const createControl = () => createSessionControlStream(remotes, {
     accept: (frame) => { sessions.handleControlFrame(frame) },
     failed: (error) => { console.error('[session-controller] control stream failed:', error) },
   })
+  let control = createControl()
+  let replacing = Promise.resolve()
+  let disposed = false
+  const replaceControl = (): void => {
+    if (disposed) return
+    const previous = control
+    const next = control = createControl()
+    replacing = Promise.all([replacing, previous.dispose()]).then(() => {
+      if (!disposed && control === next) next.start()
+    })
+    void replacing.catch((error: unknown) => { console.error('[session-controller] control replacement failed:', error) })
+  }
   ctx.remote.$on('api-session/catalog-changed', () => {
     sessions.invalidateList()
-    control.restart()
+    replaceControl()
   })
   const connected = (): void => {
     if (connection.generation.getSnapshot() === undefined) return
     // A ready control baseline may arrive before Cordis delivers connection/reset.
     sessions.handleConnected()
-    control.restart()
-    control.start()
+    replaceControl()
   }
   ctx.effect(() => connection.generation.subscribe(connected), 'session-controller.client.generation')
   connected()
@@ -149,5 +160,8 @@ export function apply(ctx: Context): void {
       return typertOwnedValue(reference.binding.ctx, () => { reference.release() })
     },
   })
-  ctx.effect(() => async () => { await control.dispose() }, 'session-controller.client.control')
+  ctx.effect(() => async () => {
+    disposed = true
+    await Promise.all([replacing, control.dispose()])
+  }, 'session-controller.client.control')
 }

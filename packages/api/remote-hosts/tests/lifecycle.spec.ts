@@ -5,7 +5,7 @@ import type { WebInstanceDescriptor } from '../src/instance-descriptor.ts'
 import type { Tunnel } from '../src/ssh.ts'
 import RemoteHosts from '../src/index.ts'
 
-const transport = vi.hoisted(() => ({ discover: vi.fn(), tunnel: vi.fn(), invoke: vi.fn(), close: vi.fn() }))
+const transport = vi.hoisted(() => ({ discover: vi.fn(), tunnel: vi.fn(), invoke: vi.fn(), close: vi.fn(), stream: vi.fn() }))
 vi.mock('../src/ssh.ts', async importOriginal => ({ ...await importOriginal<typeof import('../src/ssh.ts')>(),
   listRemoteInstances: transport.discover, openTunnel: transport.tunnel,
 }))
@@ -13,10 +13,7 @@ vi.mock('../src/remote-client.ts', async importOriginal => ({ ...await importOri
   RemoteHostClient: class {
     invoke = transport.invoke
     close = transport.close
-    async *stream(_endpoint: string, _payload: object, signal: AbortSignal): AsyncIterable<unknown> {
-      if (signal.aborted) return
-      await new Promise<void>((resolve) => { signal.addEventListener('abort', () => { resolve() }, { once: true }) })
-    }
+    stream = transport.stream
   },
 }))
 
@@ -26,18 +23,92 @@ const descriptor: WebInstanceDescriptor = {
 }
 
 /** Mount the ordinary service through Cordis so schema and effect ownership stay real. */
-async function host(): Promise<RemoteHosts> {
+async function host(context = new Context()): Promise<RemoteHosts> {
   transport.discover.mockReset().mockResolvedValue([descriptor])
   transport.tunnel.mockReset().mockResolvedValue({ port: 12345, close: vi.fn(async () => {}) })
   transport.invoke.mockReset().mockResolvedValue({ items: [] })
   transport.close.mockReset()
-  const ctx = new Context()
+  transport.stream.mockReset().mockImplementation(async function* (_endpoint: string, _payload: object, signal: AbortSignal) {
+    yield { type: 'ready', clientId: 'fixture' }
+    if (signal.aborted) return
+    await new Promise<void>((resolve) => { signal.addEventListener('abort', () => { resolve() }, { once: true }) })
+  })
+  const ctx = context
   onTestFinished(() => ctx.fiber.dispose())
   await ctx.plugin(RemoteHosts, { hosts: [{ id: 'h20', name: 'H20', sshTarget: 'fixture' }], connectOnStart: false })
   return ctx.remoteHosts
 }
 
 describe('SSH host lifecycle', () => {
+  it('keeps backing off until the event subscription is ready', async () => {
+    vi.useFakeTimers()
+    onTestFinished(() => { vi.useRealTimers() })
+    const service = await host()
+    transport.stream.mockImplementation(async function* () {
+      yield { type: 'opening' }
+      throw new Error('Event subscription unavailable')
+    })
+    await service.connect('h20')
+    await vi.advanceTimersByTimeAsync(0)
+    expect(service.list()[0]).toMatchObject({ status: 'error', retryAt: Date.now() + 5_000 })
+    await vi.advanceTimersByTimeAsync(5_000)
+    expect(service.list()[0]).toMatchObject({ status: 'error', retryAt: Date.now() + 10_000 })
+  })
+
+  it('releases a pending retry when the plugin is disposed', async () => {
+    vi.useFakeTimers()
+    onTestFinished(() => { vi.useRealTimers() })
+    const ctx = new Context()
+    const service = await host(ctx)
+    transport.discover.mockRejectedValue(new Error('Offline'))
+    await service.connect('h20')
+    expect(service.list()[0]).toHaveProperty('retryAt')
+    await ctx.fiber.dispose()
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(transport.discover).toHaveBeenCalledOnce()
+    expect(service.list()[0]).toMatchObject({ status: 'idle' })
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('rediscovers the remote instance after the event stream ends without an error', async () => {
+    vi.useFakeTimers()
+    onTestFinished(() => { vi.useRealTimers() })
+    const service = await host()
+    transport.stream.mockImplementationOnce(async function* () {
+      yield { type: 'ready', clientId: 'first' }
+    })
+    await service.connect('h20')
+    await vi.advanceTimersByTimeAsync(0)
+    expect(service.list()[0]).toMatchObject({ status: 'error', retryAt: Date.now() + 5_000 })
+    expect(transport.close).toHaveBeenCalledOnce()
+    transport.discover.mockResolvedValueOnce([{ ...descriptor, pid: 2, port: 23456 }])
+    await vi.advanceTimersByTimeAsync(5_000)
+    expect(service.list()[0]).toMatchObject({ status: 'connected', pid: 2 })
+    expect(service.list()[0]).not.toHaveProperty('retryAt')
+    expect(transport.tunnel).toHaveBeenLastCalledWith(expect.anything(), { host: '127.0.0.1', port: 23456 })
+  })
+
+  it('backs off failed HTTP probes and cancels scheduled retries when manually disconnected', async () => {
+    vi.useFakeTimers()
+    onTestFinished(() => { vi.useRealTimers() })
+    const service = await host()
+    transport.invoke.mockRejectedValue(new Error('Remote service unavailable'))
+    await service.connect('h20')
+    expect(service.list()[0]).toMatchObject({ status: 'error', retryAt: Date.now() + 5_000 })
+    await vi.advanceTimersByTimeAsync(5_000)
+    expect(service.list()[0]).toMatchObject({ status: 'error', retryAt: Date.now() + 10_000 })
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(service.list()[0]).toMatchObject({ status: 'error', retryAt: Date.now() + 20_000 })
+    await service.disconnect('h20')
+    expect(service.list()[0]).toMatchObject({ status: 'idle' })
+    expect(service.list()[0]).not.toHaveProperty('retryAt')
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(transport.discover).toHaveBeenCalledTimes(3)
+    transport.invoke.mockResolvedValue({ items: [] })
+    await service.connect('h20')
+    expect(service.list()[0]?.status).toBe('connected')
+  })
+
   it('keeps configured hosts visible before connecting and after disconnecting', async () => {
     const service = await host()
     expect(service.describe().hosts).toEqual([expect.objectContaining({ id: 'h20', status: 'idle', sshTarget: 'fixture' })])

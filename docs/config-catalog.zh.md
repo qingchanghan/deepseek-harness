@@ -231,6 +231,8 @@ export interface Config {
   readonly hosts: Volatile<RemoteHostEntry[]>
   /** Deadline for one SSH command, HTTP request, or handshake, in milliseconds. */
   readonly timeoutMs: number
+  /** Interval between WebSocket liveness probes; timeoutMs bounds each reply. */
+  readonly heartbeatIntervalMs: number
   /** Attach every configured host while this plugin activates. */
   readonly connectOnStart: boolean
   /** First delay before retrying a failed attachment, in milliseconds. */

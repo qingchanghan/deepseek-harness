@@ -35,12 +35,13 @@ kind: "package-reference"
         name: H20-141-sy
         sshTarget: H20-141-sy
     timeoutMs: 30000
+    heartbeatIntervalMs: 15000
     connectOnStart: true
 ```
 
-`sshTarget` 是一个已配置好的 OpenSSH 目标；本服务以 `BatchMode=yes` 调用 `ssh`，从不提示或保存凭据。`retryDelayMs` 与 `maxRetryDelayMs` 限定失败连接后的倍增重试，因为开发机可能在本 Host 启动之后才运行 `dsh web`。远端 Harness home 不是 `$DSH_HOME` 或 `~/.dsh` 时用 `remoteHome` 指定。插件激活时会连接每台配置的主机，生命周期变化通过 `remote-hosts/changed` 报告。
+`sshTarget` 是一个已配置好的 OpenSSH 目标；本服务以 `BatchMode=yes` 调用 `ssh`，从不提示或保存凭据。`retryDelayMs`（默认 5 秒）与 `maxRetryDelayMs`（60 秒）限定初次连接失败或连接丢失后的自动重试间隔。每次尝试都会重新发现运行中的实例，包括当前端口与启动 token。远程事件流报告就绪后，重试间隔恢复为初始值。远端 Harness home 不是 `$DSH_HOME` 或 `~/.dsh` 时用 `remoteHome` 指定。插件激活时会连接每台配置的主机，生命周期变化通过 `remote-hosts/changed` 报告。
 
-在侧边栏打开**主机**，即可添加或编辑连接、查看错误并重新连接。页面通过带修订号校验的 Settings 写入，把 `hosts` 保存在当前 profile 中。主机断开或没有会话时仍然可见；移除连接会保留远端会话。SSH 发现、HTTP 请求和 socket 握手使用 `timeoutMs`；断开连接和插件卸载会取消所属任务并关闭 SSH 转发。
+在侧边栏打开**主机**，即可添加或编辑连接、查看错误并重新连接。页面通过带修订号校验的 Settings 写入，把 `hosts` 保存在当前 profile 中。主机断开或没有会话时仍然可见；移除连接会保留远端会话。SSH 发现、HTTP 请求、socket 握手与心跳回复均受 `timeoutMs` 限制。客户端按 `heartbeatIntervalMs` 发送 WebSocket 探测；未收到回复、socket 失败或事件流结束时触发重连。调用和消息不会自动重发。断开连接和插件卸载会取消所属任务、心跳和重试，并关闭 SSH 转发。
 
 <a id="understand-the-implementation"></a>
 ## 理解实现
@@ -52,7 +53,7 @@ kind: "package-reference"
 
 一元调用转发使用共享的 Connection 解析器处理 JSON 与 multipart 字节结果，包括文件预览。失败保留远端错误码和详情。Session Controller 将远程控制基线与实时投影合并到 Local 状态，因此远程队列与 steering（中途引导）无需重新打开会话即可更新。
 
-`describe()` 返回 `RemoteHostsSnapshot`：其中每个 `RemoteHostStatus` 包含连接配置字段、显示名、生命周期状态，以及可选的错误信息或进程 id；快照还报告设置是否可写及其修订号。`setHosts(RemoteHostsUpdate)` 接收完整的连接列表与 `expectedRevision`；修订号过期时会拒绝写入，避免覆盖其他编辑。`reconnect(id)` 与 `disconnectHost(id)` 返回相同的快照。Host 消费方通过 `connected()` 获取 `RemoteHostHandle`，并调用其 `invoke(endpoint, args, signal?)` 与 `stream(endpoint, payload, signal?)`。
+`describe()` 返回 `RemoteHostsSnapshot`：其中每个 `RemoteHostStatus` 包含连接配置字段、显示名、生命周期状态，以及可选的错误信息、进程 id 或 `retryAt`（下次重试的 Unix 毫秒时间戳）；快照还报告设置是否可写及其修订号。`setHosts(RemoteHostsUpdate)` 接收完整的连接列表与 `expectedRevision`；修订号过期时会拒绝写入，避免覆盖其他编辑。`reconnect(id)` 与 `disconnectHost(id)` 返回相同的快照。Host 消费方通过 `connected()` 获取 `RemoteHostHandle`，并调用其 `invoke(endpoint, args, signal?)` 与 `stream(endpoint, payload, signal?)`。
 
 `$events` 的 emit 在本地重新发布。审批和提问通过交互桥到达本地浏览器；没有本地应答者时，请求交回远端链路。连接变化会使会话目录失效，浏览器据此读取当前主机列表。
 

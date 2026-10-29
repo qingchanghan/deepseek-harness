@@ -50,6 +50,32 @@ function makeManager(
 }
 
 describe('SessionManager instances', () => {
+  it.for(['remote', 'local', 'business'] as const)('refreshes retained history after a %s failure only when its remote transport recovers', async (kind, { mock, remote, start }) => {
+    mock.load(sessionWorld)
+    const client = await start()
+    const manager = new SessionManager(client.ctx.remote)
+    onTestFinished(() => manager.dispose())
+    remote.session.list.mockResolvedValue(ok({ items: [{ ...summary(S1),
+      ...kind === 'local' ? {} : { host: { id: 'remote', name: 'Remote' } },
+    }] }))
+    await manager.refreshList()
+    const session = manager.get(S1)
+    await session.open()
+    mock.streams.fail(FOLLOW, kind === 'business'
+      ? new RemoteError('session/not-found', 'Missing Session', { sessionId: S1 })
+      : new RemoteError('remote-hosts/not-connected', 'Host disconnected', { id: 'remote' }))
+    await vi.waitFor(() => { expect(session.getSnapshot().openState).toBe('error') })
+    await manager.refreshList()
+    if (kind === 'remote') {
+      await vi.waitFor(() => { expect(session.getSnapshot().openState).toBe('open') })
+      expect(mock.log.streams(FOLLOW)).toHaveLength(2)
+    } else {
+      expect(session.getSnapshot().openState).toBe('error')
+      expect(mock.log.streams(FOLLOW)).toHaveLength(1)
+    }
+    expect(mock.log.requests('session/prompt')).toHaveLength(0)
+  })
+
   it('refreshes again when remote-host membership changes during the initial catalog read', async ({ mock, remote }) => {
     const manager = makeManager(mock, remote)
     onTestFinished(() => manager.dispose())

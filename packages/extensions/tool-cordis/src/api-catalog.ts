@@ -6861,7 +6861,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'RemoteHostStatus',
-    declaration: 'export interface RemoteHostStatus extends RemoteHostEntry {\n    readonly id: string;\n    readonly name: string;\n    readonly status: RemoteHostStatusKind;\n    readonly error?: string;\n    readonly pid?: number;\n}',
+    declaration: 'export interface RemoteHostStatus extends RemoteHostEntry {\n    readonly id: string;\n    readonly name: string;\n    readonly status: RemoteHostStatusKind;\n    readonly error?: string;\n    readonly pid?: number;\n    readonly retryAt?: number;\n}',
   },
   {
     name: 'RemoteHostStatusKind',

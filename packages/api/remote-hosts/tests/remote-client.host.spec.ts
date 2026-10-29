@@ -4,7 +4,7 @@ import { z } from 'zod'
 import { RemoteHostClient } from '../src/remote-client.ts'
 
 function client(response: (rpcId: string) => Response) {
-  const target = new RemoteHostClient({ baseUrl: 'http://127.0.0.1:1234', token: 'fixture', timeoutMs: 1000,
+  const target = new RemoteHostClient({ baseUrl: 'http://127.0.0.1:1234', token: 'fixture', timeoutMs: 1000, heartbeatIntervalMs: 1000,
     fetch: async (url, init) => {
       const address = typeof url === 'string' ? url : url instanceof URL ? url.href : url.url
       if (address.includes('/connect?')) return new Response(null, { status: 302, headers: { 'set-cookie': 'fixture=owner' } })

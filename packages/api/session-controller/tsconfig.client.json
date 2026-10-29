@@ -13,6 +13,7 @@
   "references": [
     { "path": "../../../vendor/cordis" },
     { "path": "../gateway/tsconfig.client.json" },
+    { "path": "../remote-hosts" },
     { "path": "../../attachment/attachment" },
     { "path": "../../client/connection/tsconfig.client.json" },
     { "path": "../../client/file-upload/tsconfig.client.json" },

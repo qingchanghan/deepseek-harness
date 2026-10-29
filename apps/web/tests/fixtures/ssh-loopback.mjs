@@ -1,5 +1,5 @@
 /** SSH process fixture: descriptor discovery and one owned loopback TCP forward. */
-import { readFileSync } from 'node:fs'
+import { readFileSync, writeFileSync } from 'node:fs'
 import { createConnection, createServer } from 'node:net'
 
 const args = process.argv.slice(2)
@@ -29,5 +29,7 @@ if (!args.includes('-N')) {
     server.close(() => process.exit(0))
   })
   server.on('error', error => { process.stderr.write(`${error.message}\n`); process.exit(1) })
-  server.listen(Number(local), bind)
+  server.listen(Number(local), bind, () => {
+    writeFileSync(`${process.env.DSH_REMOTE_HOST_FIXTURE}.tunnel.pid`, String(process.pid))
+  })
 }

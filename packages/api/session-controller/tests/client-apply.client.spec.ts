@@ -8,7 +8,7 @@ import { ok, type RemoteMock } from '@deepseek-ai/dsh-remote-mock'
 import { createClientTest, type TestClient, webApp } from '@deepseek-ai/dsh-client-test-runtime/src/assembly/index.ts'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
-import { isTypertOwnedValue } from '@deepseek-ai/dsh-typert-protocol'
+import { isTypertOwnedValue, RemoteError } from '@deepseek-ai/dsh-typert-protocol'
 import { afterEach, describe, expect, vi, type MockInstance } from 'vitest'
 import { ClientSessions } from '../src/client/sessions/service.ts'
 import type { SessionListValue } from '../src/types.ts'
@@ -44,6 +44,21 @@ function baselines(accept: MockInstance): number {
 }
 
 describe('Session Controller Client apply', () => {
+  it('replaces a failed control subscription after attached-host membership changes', async ({ mock, start }) => {
+    const accept = vi.spyOn(ClientSessions.prototype, 'handleControlFrame')
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
+    await start()
+    await vi.waitFor(() => { expect(baselines(accept)).toBe(1) })
+    mock.streams.fail(CONTROL, new RemoteError('remote-hosts/not-connected', 'Remote Host disconnected', { id: 'remote' }))
+    await vi.waitFor(() => { expect(logged).toHaveBeenCalled() })
+    await emit(mock, 'api-session/catalog-changed')
+    await mock.streams.opened(CONTROL, 2)
+    await vi.waitFor(() => { expect(baselines(accept)).toBe(2) })
+    const update = { type: 'projection', sessionId: sid('remote-session'), key: 'title', seq: 1, value: 'Recovered' }
+    mock.streams.push(CONTROL, update)
+    await vi.waitFor(() => { expect(accept).toHaveBeenCalledWith(update) })
+  }, COLD_BOOT_TIMEOUT_MS)
+
   it('routes Remote events from the $events stream into the object layer and runs handleConnected once per generation', async ({ mock, start }) => {
     const connected = vi.spyOn(ClientSessions.prototype, 'handleConnected')
     const error = vi.spyOn(ClientSessions.prototype, 'handleSessionError')

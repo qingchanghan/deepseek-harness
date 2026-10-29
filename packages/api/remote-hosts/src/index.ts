@@ -49,6 +49,8 @@ export interface Config {
   readonly hosts: Volatile<RemoteHostEntry[]>
   /** Deadline for one SSH command, HTTP request, or handshake, in milliseconds. */
   readonly timeoutMs: number
+  /** Interval between WebSocket liveness probes; timeoutMs bounds each reply. */
+  readonly heartbeatIntervalMs: number
   /** Attach every configured host while this plugin activates. */
   readonly connectOnStart: boolean
   /** First delay before retrying a failed attachment, in milliseconds. */
@@ -90,7 +92,7 @@ interface HostState {
   tunnel: Tunnel | undefined
   client: RemoteHostClient | undefined
   abort: AbortController | undefined
-  retry: NodeJS.Timeout | undefined
+  retry: { timer: NodeJS.Timeout; at: number } | undefined
   attempts: number
   paused: boolean
   task: Promise<void> | undefined
@@ -110,6 +112,7 @@ export default class RemoteHosts extends TypertRemoteService {
       remoteHome: z.string().min(1).required(false),
     })).default([]).volatile(),
     timeoutMs: z.natural().min(1).default(30_000),
+    heartbeatIntervalMs: z.natural().min(1).default(15_000),
     connectOnStart: z.boolean().default(true),
     retryDelayMs: z.natural().min(1).default(5_000),
     maxRetryDelayMs: z.natural().min(1).default(60_000),
@@ -168,6 +171,7 @@ export default class RemoteHosts extends TypertRemoteService {
       status: state.status,
       ...(state.error === undefined ? {} : { error: state.error }),
       ...(state.pid === undefined ? {} : { pid: state.pid }),
+      ...(state.retry === undefined ? {} : { retryAt: state.retry.at }),
     }))
   }
 
@@ -398,13 +402,12 @@ export default class RemoteHosts extends TypertRemoteService {
         baseUrl: `http://127.0.0.1:${String(tunnel.port)}`,
         token,
         timeoutMs: this.timeoutMs,
+        heartbeatIntervalMs: this.config.heartbeatIntervalMs,
       })
       state.client = client
       state.pid = instance.pid
-      state.attempts = 0
       await client.invoke('session/list', { _request: {} }, abort.signal)
       abort.signal.throwIfAborted()
-      this.setState(state, 'connected')
       state.events = this.followEvents(state, client, abort.signal)
       signal?.throwIfAborted()
     } catch (error: unknown) {
@@ -412,8 +415,8 @@ export default class RemoteHosts extends TypertRemoteService {
       const cancelled = abort.signal.aborted || state.paused || this.disposed
       await this.detach(state)
       if (cancelled) return
-      this.fail(state, error)
       this.scheduleRetry(state)
+      this.fail(state, error)
     }
   }
 
@@ -429,12 +432,13 @@ export default class RemoteHosts extends TypertRemoteService {
     if (this.disposed || state.paused || !this.states.has(state.entry.id) || state.retry !== undefined) return
     const delay = Math.min(this.retryDelayMs * 2 ** state.attempts, this.maxRetryDelayMs)
     state.attempts += 1
-    state.retry = setTimeout(() => {
+    const timer = setTimeout(() => {
       state.retry = undefined
       if (this.disposed) return
       void this.startAttach(state)
     }, delay)
-    state.retry.unref()
+    state.retry = { timer, at: Date.now() + delay }
+    timer.unref()
   }
 
   /**
@@ -443,7 +447,7 @@ export default class RemoteHosts extends TypertRemoteService {
    */
   private clearRetry(state: HostState): void {
     if (state.retry === undefined) return
-    clearTimeout(state.retry)
+    clearTimeout(state.retry.timer)
     state.retry = undefined
   }
 
@@ -463,9 +467,12 @@ export default class RemoteHosts extends TypertRemoteService {
     let clientId: string | undefined
     try {
       for await (const value of client.stream('$events', { args: {} }, signal)) {
+        if (signal.aborted) return
         if (!isRecord(value)) continue
         if (value['type'] === 'ready' && typeof value['clientId'] === 'string') {
           clientId = value['clientId']
+          state.attempts = 0
+          this.setState(state, 'connected')
           continue
         }
         if (value['type'] === 'emit' && typeof value['event'] === 'string' && value['event'].startsWith('api-session/')) {
@@ -484,10 +491,12 @@ export default class RemoteHosts extends TypertRemoteService {
           }
         }
       }
+      throw new RemoteHostFailure({ code: 'remote-host/closed', message: 'The remote Host event stream ended', details: {} })
     } catch (error: unknown) {
       if (signal.aborted) return
-      this.fail(state, error)
+      client.close()
       this.scheduleRetry(state)
+      this.fail(state, error)
     }
   }
 

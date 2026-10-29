@@ -156,7 +156,7 @@ export function HostsPanelView({ groups, state, actions, t }: HostsPanelViewProp
             <div className={css.hostIdentity}>
               <h2 className={css.groupLabel}>{group.label}</h2>
               <span className={css.groupNote}>{group.note}</span>
-              {group.host === undefined ? null : <span role="status" className={css.status}>{t(`status.${group.host.status}`)}</span>}
+              {group.host === undefined ? null : <span role="status" className={css.status}>{t(`status.${group.host.retryAt === undefined ? group.host.status : 'retrying'}`)}</span>}
               <span className={css.groupCount}>{t('host.count', { count: group.sessions.length })}</span>
             </div>
             {group.host === undefined ? null : (
@@ -164,10 +164,10 @@ export function HostsPanelView({ groups, state, actions, t }: HostsPanelViewProp
                 <Button size="sm" disabled={working === group.key} onClick={() => {
                   void run(group.key, () => actions.reconnectHost(group.key))
                 }}>{t(group.host.status === 'idle' ? 'host.connect' : 'host.reconnect')}</Button>
-                {group.host.status !== 'connected' && group.host.status !== 'connecting' ? null : (
+                {group.host.status !== 'connected' && group.host.status !== 'connecting' && group.host.retryAt === undefined ? null : (
                   <Button size="sm" disabled={working === group.key} onClick={() => {
                     void run(group.key, () => actions.disconnectHost(group.key))
-                  }}>{t('host.disconnect')}</Button>
+                  }}>{t(group.host.retryAt === undefined ? 'host.disconnect' : 'host.stopRetry')}</Button>
                 )}
                 <Button size="sm" disabled={!state.catalog.writable || working === group.key}
                   onClick={() => { setEditor({ entry: group.host, revision: state.catalog.revision }) }}>{t('host.edit')}</Button>
