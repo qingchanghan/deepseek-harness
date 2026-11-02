@@ -1,0 +1,13 @@
+- id: llm-deepseek
+  disabled: true
+
+- id: llm-pi-ai
+  config:
+    providers:
+      google:
+        apiKeyEnv: PI_SNAPSHOT_KEY
+        reasoning: high
+        models:
+          - id: gemini-4-argon
+            reasoningEfforts:
+              high: HIGH

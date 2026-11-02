@@ -22,6 +22,18 @@ index ca40f1b4a4e99f441503cf364822073a7a6c478a..14c204261b3f6c47f8950cf44f0fb9f8
          stream.push({ type: "toolcall_delta", contentIndex: index, delta: delta.toolUse.input || "", partial: output });
      }
      else if (delta?.reasoningContent) {
+diff --git a/dist/api/google-shared.js b/dist/api/google-shared.js
+--- a/dist/api/google-shared.js
++++ b/dist/api/google-shared.js
+@@ -36,6 +36,8 @@ export function resolveGoogleThinkingLevel(model, level) {
+  */
+ export function usesGoogleThinkingLevel(model) {
+     const id = model.id.toLowerCase();
++    if (id === "gemini-4-argon")
++        return true;
+     return (
+     // Match Gemini 3 Pro/Flash IDs with or without a minor version, such as
+     // gemini-3-flash-preview, gemini-3.1-pro-preview, and gemini-3.8-flash.
 diff --git a/dist/api/mistral-conversations.js b/dist/api/mistral-conversations.js
 index 2fc3ad343af090a919f5b71454b29f23b009fc21..64aa8a4ab2461484f22066913455518f69157857 100644
 --- a/dist/api/mistral-conversations.js

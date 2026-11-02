@@ -1,0 +1,11 @@
+version: 1
+scenario: pi-ai-google-high
+profile: headless
+composition: pi-ai-google-high
+recording: authored
+environment:
+  PI_SNAPSHOT_KEY: keyless-replay
+header:
+  class: pi-ai-google-high
+  pin: true
+  toolSchemasSource: text-turn

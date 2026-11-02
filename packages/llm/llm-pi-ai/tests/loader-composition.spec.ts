@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import Loader, { type ModuleLoaderV2 } from '@deepseek-ai/cordis-plugin-loader'
 import Include from '@deepseek-ai/cordis-plugin-include'
-import LlmRuntime, { createMessage, createUserMessage, userAgent } from '@deepseek-ai/dsh-llm'
+import LlmRuntime, { createMessage, createUserMessage, ReasoningEffortId, userAgent } from '@deepseek-ai/dsh-llm'
 import AuthorizationService from '@deepseek-ai/dsh-authorization'
 import LocalCredentialProvider from '@deepseek-ai/dsh-credentials-local'
 import { profileComposition } from '../../../settings/settings/tests/profile-composition.ts'
@@ -87,6 +87,49 @@ async function loadComposition(): Promise<{ ctx: Context; settingsPath: string }
 }
 
 describe('llm-pi-ai real dormant composition', () => {
+  it('pins Argon to HIGH thinking through a settings-only Google route', async () => {
+    vi.stubEnv('PI_COMPOSITION_KEY', '')
+    const server = await mockServer([{ events: [JSON.stringify({
+      candidates: [{ content: { role: 'model', parts: [{ text: 'hello' }] }, finishReason: 'STOP' }],
+      usageMetadata: { promptTokenCount: 3, candidatesTokenCount: 1, totalTokenCount: 4 },
+    })] }])
+    const { ctx } = await loadComposition()
+    await ctx.settings.update('llm-pi-ai', {
+      providers: {
+        google: {
+          apiKeyEnv: 'PI_COMPOSITION_KEY',
+          baseURL: `${server.url}/gateway/v1beta`,
+          reasoning: 'high',
+          models: [{ id: 'gemini-4-argon', reasoningEfforts: { high: 'HIGH' } }],
+        },
+      },
+    })
+    await expect(ctx.llm.resolveModelInfo('google', 'gemini-4-argon')).resolves.toMatchObject({
+      reasoning: { efforts: [{ id: 'high' }], defaultEffort: 'high' },
+    })
+    const request = {
+      provider: 'google', model: 'gemini-4-argon',
+      messages: [createUserMessage({
+        content: [{ type: 'text', text: 'hi' }],
+        source: { kind: 'model', provider: 'google', model: 'gemini-4-argon' },
+      })],
+    }
+    const result = await assemble(ctx, request)
+    expect(result.finish).toEqual({ kind: 'stop' })
+    expect(result.message.content).toEqual([{ type: 'text', text: 'hello' }])
+    expect(server.paths).toEqual(['/gateway/v1beta/models/gemini-4-argon:streamGenerateContent?alt=sse'])
+    expect(server.headers[0]?.['x-goog-api-key']).toBe('key-from-store')
+    expect(server.requests[0]).toMatchObject({
+      generationConfig: { thinkingConfig: { thinkingLevel: 'HIGH', includeThoughts: true } },
+    })
+    expect(server.requests[0]).not.toHaveProperty('generationConfig.thinkingConfig.thinkingBudget')
+    for (const level of ['off', 'low', 'medium']) {
+      await expect(assemble(ctx, { ...request, reasoningEffort: ReasoningEffortId(level) }))
+        .resolves.toMatchObject({ finish: { kind: 'error', failure: { code: 'UNSUPPORTED_REASONING_EFFORT' } } })
+    }
+    expect(server.requests).toHaveLength(1)
+  })
+
   it('boots with zero routes and registers one the moment settings supply a profile', async () => {
     vi.stubEnv('PI_COMPOSITION_KEY', '')
     const server = await mockServer([{ events: textEvents }])
