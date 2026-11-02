@@ -104,7 +104,7 @@ profile 的 `models` 列表会替换而非扩展路由的已安装目录；每�
 
 确切模型元数据将 `reasoning.efforts` 按可选强度从低到高排列。配置函数可从该列表中选择，再由 `prepareCall()` 校验具体强度。适配器只接收解析后的控制项。选择 `off` 不保证禁用推理：以省略推理字段表达该值的协议会沿用网关默认行为。所选等级下产生的推理 token 都计入该请求的输出上限。
 
-对于 `google` 路由上的 `gemini-4-argon`，将 profile 的 `reasoning` 设为 `high`、模型的 `reasoningEfforts` 设为 `{ high: HIGH }`，即可固定为 HIGH 思考等级。Google 请求会发送 `thinkingLevel: HIGH` 和 `includeThoughts: true`；显式指定其他推理等级会在发送请求前被拒绝。已安装的 pi-ai 补丁为 Argon 提供离散思考等级控制。
+对于 `google` 路由上的 `gemini-4-argon`，声明 `reasoningEfforts: { low: LOW, medium: MEDIUM, high: HIGH }`，即可提供三个受支持的思考等级。将 profile 的 `reasoning` 设为 `high`，可保留 HIGH 默认值。Google 请求会发送所选 `thinkingLevel` 和 `includeThoughts: true`；未声明的等级会在发送请求前被拒绝。已安装的 pi-ai 补丁为 Argon 提供离散思考等级控制。当端点支持图片输入时，在模型上声明 `input: [text, image]`，让 Harness 接收并转发图片附件。
 
 对于自托管 Chat Completions 端点，`thinkingTokenBudgetField` 选择推理预算参数，`vllmPriority` 在服务端启用优先级调度时设置整数调度优先级。模板参数接受 `$var: thinking.budget`。`openai-responses` 网关可设置 `supportsMaxOutputTokens: false` 来省略 `max_output_tokens`；Azure 与 Codex 传输会忽略这个共享兼容字段。这些控制均需显式启用；目录拥有的 Anthropic effort 和回退能力不是可配置开关。
 

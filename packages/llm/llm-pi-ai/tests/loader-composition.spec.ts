@@ -87,7 +87,7 @@ async function loadComposition(): Promise<{ ctx: Context; settingsPath: string }
 }
 
 describe('llm-pi-ai real dormant composition', () => {
-  it('pins Argon to HIGH thinking through a settings-only Google route', async () => {
+  it.each(['default', 'low', 'medium', 'high'] as const)('selects Argon %s thinking through a settings-only Google route', async (level) => {
     vi.stubEnv('PI_COMPOSITION_KEY', '')
     const server = await mockServer([{ events: [JSON.stringify({
       candidates: [{ content: { role: 'model', parts: [{ text: 'hello' }] }, finishReason: 'STOP' }],
@@ -100,15 +100,16 @@ describe('llm-pi-ai real dormant composition', () => {
           apiKeyEnv: 'PI_COMPOSITION_KEY',
           baseURL: `${server.url}/gateway/v1beta`,
           reasoning: 'high',
-          models: [{ id: 'gemini-4-argon', reasoningEfforts: { high: 'HIGH' } }],
+          models: [{ id: 'gemini-4-argon', input: ['text', 'image'], reasoningEfforts: { low: 'LOW', medium: 'MEDIUM', high: 'HIGH' } }],
         },
       },
     })
     await expect(ctx.llm.resolveModelInfo('google', 'gemini-4-argon')).resolves.toMatchObject({
-      reasoning: { efforts: [{ id: 'high' }], defaultEffort: 'high' },
+      reasoning: { efforts: [{ id: 'low' }, { id: 'medium' }, { id: 'high' }], defaultEffort: 'high' },
     })
     const request = {
       provider: 'google', model: 'gemini-4-argon',
+      ...(level === 'default' ? {} : { reasoningEffort: ReasoningEffortId(level) }),
       messages: [createUserMessage({
         content: [{ type: 'text', text: 'hi' }],
         source: { kind: 'model', provider: 'google', model: 'gemini-4-argon' },
@@ -120,11 +121,11 @@ describe('llm-pi-ai real dormant composition', () => {
     expect(server.paths).toEqual(['/gateway/v1beta/models/gemini-4-argon:streamGenerateContent?alt=sse'])
     expect(server.headers[0]?.['x-goog-api-key']).toBe('key-from-store')
     expect(server.requests[0]).toMatchObject({
-      generationConfig: { thinkingConfig: { thinkingLevel: 'HIGH', includeThoughts: true } },
+      generationConfig: { thinkingConfig: { thinkingLevel: level === 'default' ? 'HIGH' : level.toUpperCase(), includeThoughts: true } },
     })
     expect(server.requests[0]).not.toHaveProperty('generationConfig.thinkingConfig.thinkingBudget')
-    for (const level of ['off', 'low', 'medium']) {
-      await expect(assemble(ctx, { ...request, reasoningEffort: ReasoningEffortId(level) }))
+    for (const unsupported of ['off', 'minimal', 'xhigh', 'max']) {
+      await expect(assemble(ctx, { ...request, reasoningEffort: ReasoningEffortId(unsupported) }))
         .resolves.toMatchObject({ finish: { kind: 'error', failure: { code: 'UNSUPPORTED_REASONING_EFFORT' } } })
     }
     expect(server.requests).toHaveLength(1)
