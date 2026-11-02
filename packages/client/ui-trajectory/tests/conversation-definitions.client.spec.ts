@@ -959,6 +959,38 @@ describe('Trajectory conversation Definitions', () => {
     expect(snapshot(value).requests.at(-1)).toMatchObject({ prompt: { system: '' } })
   })
 
+  it('keeps replies updating after prepend resolves an unchanged system prompt', () => {
+    const value = assembler([
+      at(5, 'step/start', { turn: 2, step: 1 }),
+      at(6, 'system/message', { turn: 2, step: 1, message: systemMessage('B') }, { surfaceOp: 'append' }),
+      at(7, 'request/header', { reason: 'resume', header: { config: { provider: 'test', model: 'test' } } }),
+      at(8, 'user/message', {
+        ...systemMessage('summary'), role: 'user', source: { kind: 'compact-checkpoint', compactionId: 'compaction-1' },
+      }, { surfaceOp: { op: 'replace', startSeq: 2, endSeq: 3 } }),
+      at(9, 'assistant/live-chunk', {
+        turn: 2, step: 1, chunk: { type: 'text-delta', index: 0, text: 'complete ' },
+      }),
+    ], true)
+    expect(snapshot(value).partial?.blocks).toEqual([{ kind: 'text', text: 'complete ' }])
+    value.prepend([
+      at(1, 'system/message', { turn: 1, step: 1, message: systemMessage('A') }, { surfaceOp: 'append' }),
+      at(2, 'user/message', { id: 'question', role: 'user', content: [{ type: 'text', text: 'question' }], source: { kind: 'user' } }),
+      at(3, 'assistant/message', { turn: 1, step: 1, message: assistantMessage('earlier', 'earlier reply') }),
+    ], false)
+    value.flush()
+    value.append(at(10, 'assistant/live-chunk', {
+      turn: 2, step: 1, chunk: { type: 'text-delta', index: 0, text: 'reply after prepend' },
+    }))
+    value.flush()
+    expect(snapshot(value).partial?.blocks).toEqual([{ kind: 'text', text: 'complete reply after prepend' }])
+    value.append(at(11, 'assistant/message', { turn: 2, step: 1, message: assistantMessage('reply', 'complete reply after prepend') }))
+    value.flush()
+    expect(snapshot(value).requests.at(-1)).toMatchObject({ prompt: { system: 'B' } })
+    expect(snapshot(value).eventNodes.find(node => node.seq === 11)).toMatchObject({
+      kind: 'assistant', blocks: [{ kind: 'text', text: 'complete reply after prepend' }],
+    })
+  })
+
   it('retains an in-history update without a loaded header as a plain system node', () => {
     const value = assembler([
       at(1, 'turn/start', { turn: 1 }),

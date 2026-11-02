@@ -26,6 +26,8 @@ export interface TrajectorySystemMessageState extends SystemPromptState {
  * `request/header` follows a prompt change that keeps the cached history.
  * Surface replacements also contribute prompt changes when they remove the
  * effective node; earlier request facts remain historical.
+ * Resolving an unloaded replacement can hide its synthetic header; the
+ * materialized node keeps its identity so other conversation views keep updating.
  * @param inspect - Pure surface interpretation supplied by uiConversation.
  * @returns The Trajectory system-prompt Definition.
  */
@@ -81,10 +83,12 @@ function trajectorySystemMessageDefinition(inspect: SystemPromptInspector): Conv
         return trajectoryNode(context, state.header.seq, { kind: 'request-header', header: state.header })
       }
       const prompt = state?.introduced
-      return prompt !== undefined && prompt.text !== ''
-        && context.start?.event.type === 'system/message' && context.start.event.surfaceOp === 'append'
-        ? trajectoryNode(context, prompt.seq, { kind: 'system-prompt', prompt })
-        : null
+      if (prompt !== undefined && prompt.text !== ''
+        && context.start?.event.type === 'system/message' && context.start.event.surfaceOp === 'append') {
+        return trajectoryNode(context, prompt.seq, { kind: 'system-prompt', prompt })
+      }
+      const current = context.current.get('trajectory')
+      return current == null ? null : { ...current, visibility: 'hidden' }
     },
   }
 }

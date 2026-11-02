@@ -147,7 +147,7 @@ function applyTurnErrors(
   }
 }
 
-/** Simple keyed adapter retaining the old Trajectory snapshot and stage layout. */
+/** Keyed Trajectory adapter; hidden nodes retain identity without contributing records or request metadata. */
 export class TrajectorySnapshotBuilder implements ConversationViewBuilder<
   TrajectoryConversationViewNode,
   TrajectorySnapshot
@@ -173,7 +173,7 @@ export class TrajectorySnapshotBuilder implements ConversationViewBuilder<
     for (const node of input.upserts) {
       const previous = this.nodes.get(node.key)
       this.nodes.set(node.key, node)
-      if (previous === undefined || previous.anchorSeq !== node.anchorSeq) {
+      if (previous === undefined || previous.anchorSeq !== node.anchorSeq || previous.visibility !== node.visibility) {
         structural = true
         continue
       }
@@ -292,6 +292,7 @@ export class TrajectorySnapshotBuilder implements ConversationViewBuilder<
 
   private rebuildContributions(): void {
     this.contributions = [...this.nodes.values()]
+      .filter(node => node.visibility !== 'hidden')
       .sort((left, right) => left.anchorSeq - right.anchorSeq || left.key.localeCompare(right.key))
     this.positions.clear()
     for (const [index, contribution] of this.contributions.entries()) {

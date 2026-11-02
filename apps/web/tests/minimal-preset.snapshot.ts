@@ -302,13 +302,20 @@ describe('minimal manual compaction', () => {
     await expect.poll(() => card.getAttribute('aria-expanded')).toBe('true')
     await compareOrRefreshGolden(join(snapshotDir, 'ui.expected.md'),
       await captureStableAria(page, '[class*="centerCol"]', scaffold.workspaceCwd), MODE)
+    await page.getByRole('tab', { name: 'Trajectory' }).click()
+    await page.getByRole('table').waitFor()
+    await page.getByRole('row', { name: 'Request 3, ASSISTANT, MINIMAL_COMPACT_OK', exact: true }).waitFor()
+    await compareOrRefreshGolden(join(snapshotDir, 'trajectory.expected.md'),
+      await captureStableAria(page, '[class*="centerCol"]', scaffold.workspaceCwd), MODE)
+    await page.getByRole('tab', { name: 'Chat', exact: true }).click()
+    await page.getByText('MINIMAL_COMPACT_OK', { exact: true }).waitFor()
     expect(tripwire.pageErrors).toEqual([])
     expect(tripwire.warnings).toEqual([])
   })
 
   it('keeps its snapshot inventory closed', async () => {
     await assertFixtureInventory(snapshotDir, [
-      'session.v4.jsonl', 'system-prompt.expected.md', 'tool-schemas.expected.json', 'ui.expected.md',
+      'session.v4.jsonl', 'system-prompt.expected.md', 'tool-schemas.expected.json', 'ui.expected.md', 'trajectory.expected.md',
     ])
   })
 })

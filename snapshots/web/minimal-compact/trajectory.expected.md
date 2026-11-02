@@ -1,0 +1,57 @@
+- banner:
+  - navigation "Session hierarchy": "Remember the project requirements: imple"
+  - text: Minimal mode
+  - button "More actions"
+  - button "Open right sidebar"
+  - tablist:
+    - tab "Chat"
+    - tab "Trajectory" [selected]
+- toolbar "Trajectory toolbar":
+  - button "Use actual duration": Duration
+  - button "Collapse turns": Turns
+  - button "Collapse calls": Calls
+  - searchbox "Search trajectory"
+- region "Trajectory timeline"
+- table:
+  - rowgroup:
+    - row "SYSTEM, Initial System Prompt":
+      - cell "SYSTEM"
+      - cell "Initial System Prompt"
+    - 'row "USER, Remember the project requirements: implement image reading in minimal mode by reusing the existing filesystem tool. Preserve the fixed system prompt and keep standard mode unchanged. The new tool selection configuration must default to the full filesystem suite and reject unknown names, duplicate names, and empty lists. Minimal mode selects read_image only. Image reads must use the inherited filesystem authorization and durable attachment store, and the calling model must explicitly support image input. Do…"':
+      - cell "Turn 1 USER": USER
+      - 'cell "Remember the project requirements: implement image reading in minimal mode by reusing the existing filesystem tool. Preserve the fixed system prompt and keep standard mode unchanged. The new tool selection configuration must default to the full filesystem suite and reject unknown names, duplicate names, and empty lists. Minimal mode selects read_image only. Image reads must use the inherited filesystem authorization and durable attachment store, and the calling model must explicitly support image input. Do…"'
+    - 'row "CONTEXT, Current runtime context. This snapshot supersedes earlier runtime-context snapshots. Current working directory: \"{{cwd}}\"."':
+      - cell "CONTEXT"
+      - 'cell "Current runtime context. This snapshot supersedes earlier runtime-context snapshots. Current working directory: \"{{cwd}}\"."'
+    - row "Request 1, ASSISTANT, MINIMAL_COMPACT_READY":
+      - 'cell "Request #1 ASSISTANT"':
+        - 'button "Request #1"'
+        - text: ASSISTANT
+      - cell "MINIMAL_COMPACT_READY"
+    - row "Request 2, COMPACTED, Implement minimal image reading through the existing filesystem tool, preserving permissions, model capability checks, and standard mode. Enable automatic and manual compaction.":
+      - 'cell "Request #2 · Compaction Between turns COMPACTED"':
+        - 'button "Request #2 · Compaction"'
+        - text: Between turns COMPACTED
+      - cell "Implement minimal image reading through the existing filesystem tool, preserving permissions, model capability checks, and standard mode. Enable automatic and manual compaction."
+    - row "CONTEXT, This is an automatically generated checkpoint condensing an earlier span of the conversation to free up context. Treat the captured context as established background and build on it without restating it. Continue the task directly from the messages that follow, without acknowledging this checkpoint. <compacted-summary>":
+      - cell "Turn 2 CONTEXT": CONTEXT
+      - cell "This is an automatically generated checkpoint condensing an earlier span of the conversation to free up context. Treat the captured context as established background and build on it without restating it. Continue the task directly from the messages that follow, without acknowledging this checkpoint. <compacted-summary>"
+    - row "USER, Continue using the project requirements. Reply exactly MINIMAL_COMPACT_OK and stop.":
+      - cell "USER"
+      - cell "Continue using the project requirements. Reply exactly MINIMAL_COMPACT_OK and stop."
+    - 'row "CONTEXT, Current runtime context. This snapshot supersedes earlier runtime-context snapshots. Current working directory: \"{{cwd}}\"."':
+      - cell "CONTEXT"
+      - 'cell "Current runtime context. This snapshot supersedes earlier runtime-context snapshots. Current working directory: \"{{cwd}}\"."'
+    - row "Request 3, ASSISTANT, MINIMAL_COMPACT_OK":
+      - 'cell "Request #3 ASSISTANT"':
+        - 'button "Request #3"'
+        - text: ASSISTANT
+      - cell "MINIMAL_COMPACT_OK"
+- textbox "Message or run a task, / commands, @ files or sessions"
+- button "Add files or run commands"
+- 'button "Access mode, current: Workspace Write"': Workspace Write
+- button "Select model, current DeepSeek-V4-Flash": DeepSeek-V4-Flash
+- button "Send message" [disabled]
+- button "2 turns 2 steps"
+- button "28 tok · Cache hit 0%": 28 tokCache hit 0%
+- button "0% of context used": 0%

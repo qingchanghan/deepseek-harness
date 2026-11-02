@@ -67,6 +67,19 @@ function compactionRequest(startSeq: number): Extract<RequestView, { purpose: 'c
 }
 
 describe('TrajectorySnapshotBuilder', () => {
+  it('excludes hidden contributions on replacement and visibility updates', () => {
+    const builder = new TrajectorySnapshotBuilder()
+    const node = contribution('assistant:1', 1, {
+      kind: 'assistant', partial: null, request: assistantRequest(1, 1),
+    })
+    const hidden = { ...node, visibility: 'hidden' as const }
+    expect(builder.replace({ nodes: [hidden] }).requests).toEqual([])
+    expect(builder.apply({ upserts: [node] }).requests).toEqual([assistantRequest(1, 1)])
+    expect(builder.apply({ upserts: [hidden] }).requests).toEqual([])
+    expect(builder.apply({ upserts: [hidden] }).requests).toEqual([])
+    expect(builder.apply({ upserts: [node] }).requests).toEqual([assistantRequest(1, 1)])
+  })
+
   it('inherits one request header across requests without repeating its prompt change', () => {
     const prompt = {
       config: { provider: 'test', model: 'test' },

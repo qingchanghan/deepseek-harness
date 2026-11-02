@@ -60,6 +60,8 @@ export type TrajectoryContribution =
 /** Target envelope consumed by the Trajectory snapshot builder. */
 export interface TrajectoryConversationViewNode extends ConversationViewNode {
   readonly target: 'trajectory'
+  /** Hidden nodes retain their key but contribute no records or request metadata; omission means visible. */
+  readonly visibility?: 'visible' | 'hidden'
   readonly anchorSeq: number
   readonly location: ConversationLocation
   readonly data: TrajectoryContribution
