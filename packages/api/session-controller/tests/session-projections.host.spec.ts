@@ -367,6 +367,10 @@ describe('session.history projections block', () => {
       done: false,
       value: { type: 'projection', key: 'sessionListMetadata' },
     })
+    await expect(iterator.next()).resolves.toMatchObject({
+      done: false,
+      value: { type: 'projection', key: 'sessionActivity' },
+    })
     const extra = iterator.next()
     const quiet = Symbol('quiet')
     expect(await Promise.race([
@@ -469,6 +473,7 @@ describe('session.history projections block', () => {
     })
     await fiber.dispose()
     expect('sessionListMetadata' in ctx.sessionProjections.snapshot(session).values).toBe(false)
+    expect('sessionActivity' in ctx.sessionProjections.snapshot(session).values).toBe(false)
   })
 })
 
@@ -761,7 +766,7 @@ describe('Session control projection frames', () => {
     await new Promise(resolve => setTimeout(resolve, 0))
     const abort = new AbortController()
     const stream = proxy.control(abort.signal)
-    const collected = collect(stream, 5, abort)
+    const collected = collect(stream, 8, abort)
 
     const now = vi.spyOn(Date, 'now').mockReturnValue(100)
     seedMessages(session, 1)
@@ -788,6 +793,11 @@ describe('Session control projection frames', () => {
       { type: 'projection', sessionId: session.id, key: 'sessionListMetadata', value: { blank: true, lastPromptAt: 100 }, seq: 0 },
       { type: 'projection', sessionId: session.id, key: 'sessionListMetadata', value: { blank: false, lastPromptAt: 100 }, seq: 1 },
       { type: 'projection', sessionId: session.id, key: 'sessionListMetadata', value: { blank: false, lastPromptAt: 300 }, seq: 2 },
+    ])
+    expect(frames.filter(f => f.type === 'projection' && f.key === 'sessionActivity')).toEqual([
+      { type: 'projection', sessionId: session.id, key: 'sessionActivity', value: 100, seq: 0 },
+      { type: 'projection', sessionId: session.id, key: 'sessionActivity', value: 200, seq: 1 },
+      { type: 'projection', sessionId: session.id, key: 'sessionActivity', value: 300, seq: 2 },
     ])
     // Frame seq aligns with the tail block's asOfSeq vocabulary (higher-seq-wins compatible).
     const tail = await opening(proxy, session.id)

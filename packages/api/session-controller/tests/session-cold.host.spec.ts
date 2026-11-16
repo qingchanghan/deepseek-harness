@@ -242,8 +242,8 @@ describe('sessions.list cold merge', () => {
 
 })
 
-describe('attached updatedAt tracks human prompts', () => {
-  it('ignores pickup and non-prompt work after the latest human message', async () => {
+describe('attached updatedAt tracks conversation activity', () => {
+  it('ignores seed pickup and advances on a new turn or prompt', async () => {
     const ctx = new Context()
     await ctx.plugin(SessionStore)
     await ctx.plugin(AgentRegistry)
@@ -274,12 +274,11 @@ describe('attached updatedAt tracks human prompts', () => {
     const summary = listed.value.items.find(item => item.sessionId === 'resumed-untouched')
     expect(summary?.updatedAt).toBe(500)
 
-    // A lifecycle boundary is not a human update.
-    resumed.append('turn/start', { turn: 2 })
+    const turn = resumed.append('turn/start', { turn: 2 })
     const afterBoundary = await remote.list(request({}))
     if (!afterBoundary.ok) throw new Error('list failed')
     expect(afterBoundary.value.items.find(item => item.sessionId === 'resumed-untouched')?.updatedAt)
-      .toBe(worked)
+      .toBe(turn.time)
 
     const prompt = resumed.append('user/message', createUserMessage({
       content: [{ type: 'text', text: 'new prompt' }],

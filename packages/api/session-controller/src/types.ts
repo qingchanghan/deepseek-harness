@@ -17,6 +17,8 @@ declare module '@deepseek-ai/dsh-session-projection/types' {
   interface SessionProjectionStateMap {
     /** Host state persisted for cold Session list summaries. */
     sessionListMetadata: SessionListMetadata
+    /** Latest committed conversation activity time; independent of the prompt-only cache. */
+    sessionActivity: number | null
     /** Host state for the boot-constant image-limit view. */
     imageLimits: null
     /** Durable model selection already used by a request and still pending for a later request. */
@@ -25,6 +27,8 @@ declare module '@deepseek-ai/dsh-session-projection/types' {
   interface SessionProjectionMap {
     /** Persisted facts used to summarize a Session without activating it. */
     sessionListMetadata: SessionListMetadata
+    /** Latest committed conversation activity time, when the Host has folded it. */
+    sessionActivity: number | null
     /** Image-intake limits enforced by the Session prompt endpoint. */
     imageLimits: ImageAttachmentLimits
     /** Durable model selection already used and selected for the next request. */
@@ -641,10 +645,10 @@ declare module '@deepseek-ai/cordis' {
      */
     'api-session/status'(sessionId: SessionId, running: boolean): void
     /**
-     * One user-authored durable message advanced Session list activity.
+     * One committed conversation event advanced Session list activity.
      * @mode emit
      * @param sessionId - addressed Session identity.
-     * @param updatedAt - durable message time used for list ordering.
+     * @param updatedAt - committed activity time used for list ordering.
      */
     'api-session/activity'(sessionId: SessionId, updatedAt: number): void
     /**

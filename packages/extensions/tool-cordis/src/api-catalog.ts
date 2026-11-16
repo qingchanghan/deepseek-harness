@@ -4199,9 +4199,9 @@ export const EVENT_API: readonly EventApiEntry[] = [
     name: 'api-session/activity',
     mode: 'emit',
     signature: '\'api-session/activity\'(sessionId: SessionId, updatedAt: number): void',
-    summary: 'One user-authored durable message advanced Session list activity.',
-    description: 'One user-authored durable message advanced Session list activity.',
-    parameters: [{ name: 'sessionId', description: 'addressed Session identity.' }, { name: 'updatedAt', description: 'durable message time used for list ordering.' }],
+    summary: 'One committed conversation event advanced Session list activity.',
+    description: 'One committed conversation event advanced Session list activity.',
+    parameters: [{ name: 'sessionId', description: 'addressed Session identity.' }, { name: 'updatedAt', description: 'committed activity time used for list ordering.' }],
   },
   {
     name: 'api-session/added',

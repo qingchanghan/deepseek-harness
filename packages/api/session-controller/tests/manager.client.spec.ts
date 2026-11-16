@@ -625,6 +625,21 @@ describe('list lifecycle', () => {
     expect(manager.getListSnapshot().items[0]?.updatedAt).toBe(500)
   })
 
+  it('advances recency from conversation activity and ignores older cached activity', async ({ mock, remote }) => {
+    const manager = makeManager(mock, remote)
+    onTestFinished(() => manager.dispose())
+    remote.session.list.mockResolvedValue(ok({ items: [
+      summary(S1, { updatedAt: 100 }), summary(S2, { updatedAt: 200 }),
+    ] as never[] }))
+    await manager.refreshList()
+    expect(manager.getListSnapshot().items.find(item => item.sessionId === S1)?.updatedAt).toBe(100)
+    manager.handleControlFrame({ type: 'projection', sessionId: S1, key: 'sessionActivity', value: 300, seq: 9 })
+    expect(manager.getListSnapshot().items.find(item => item.sessionId === S1)?.updatedAt).toBe(300)
+    manager.handleControlFrame({ type: 'projection', sessionId: S1, key: 'sessionActivity', value: 90, seq: 8 })
+    await manager.refreshList()
+    expect(manager.getListSnapshot().items[0]).toMatchObject({ sessionId: S1, updatedAt: 300 })
+  })
+
   it('keeps the error in the list snapshot on failure', async ({ mock, remote }) => {
     remote.session.list.mockResolvedValue(err(new RemoteError('gateway/internal', 'boom', {})))
     const manager = makeManager(mock, remote)

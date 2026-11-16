@@ -39,6 +39,27 @@ const imageLimitsSchema = z.object({
 }) as unknown as z.ZodType<ImageAttachmentLimits>
 
 /**
+ * Whether a committed event represents conversation activity rather than settings or metadata.
+ * @param event - Committed Session event.
+ * @returns Whether its timestamp advances Session recency.
+ */
+export function isSessionActivity(event: SessionEvent): boolean {
+  switch (event.type) {
+    case 'user/message': return event.data.source.kind === 'user'
+    case 'assistant/message':
+    case 'assistant/attempt':
+    case 'tool/call':
+    case 'tool/result':
+    case 'turn/start':
+    case 'turn/end':
+    case 'step/start':
+    case 'step/end': return true
+    // Other plugins' metadata does not change conversation recency.
+    default: return false
+  }
+}
+
+/**
  * Advance the Session-list metadata projection by one committed event.
  * @param state - metadata before the event.
  * @param event - next committed Session event.
@@ -89,6 +110,14 @@ export class ApiSessionList {
       wire: { viewSchema: sessionListMetadataSchema, view: state => state },
       stateVersion: 1,
     })
+    ctx.sessionProjections.register<'sessionActivity', number | null>({
+      key: 'sessionActivity',
+      stateSchema: z.number().nullable(),
+      init: () => null,
+      apply: (state, event) => isSessionActivity(event) ? Math.max(state ?? 0, event.time) : state,
+      wire: { viewSchema: z.number().nullable(), view: state => state },
+      stateVersion: 1,
+    })
     ctx.inject(['attachments'], (attachmentCtx) => {
       ctx.sessionProjections.register<'imageLimits', null>({
         key: 'imageLimits',
@@ -114,7 +143,7 @@ export class ApiSessionList {
     const metadata = projections?.values.sessionListMetadata
     return {
       sessionId: session.id,
-      updatedAt: updatedAt(session.header, metadata),
+      updatedAt: updatedAt(session.header, metadata, projections?.values.sessionActivity),
       agentAvailable: this.ctx.agents.get(session.id)?.session === session,
       formatStatus: 'current',
       running: this.ctx.agents.get(session.id)?.status === 'running',
@@ -169,7 +198,7 @@ export class ApiSessionList {
     const metadata = projections?.values.sessionListMetadata
     return {
       sessionId: header.id,
-      updatedAt: updatedAt(header, metadata),
+      updatedAt: updatedAt(header, metadata, projections?.values.sessionActivity),
       agentAvailable: false,
       ...(formatStatus === undefined ? {} : { formatStatus }),
       running: false,
@@ -346,8 +375,8 @@ function normalizeSearchQuery(query: string): string {
   return normalized
 }
 
-function updatedAt(header: SessionHeader, metadata: SessionListMetadata | undefined): number {
-  return Math.max(header.createdAt, metadata?.lastPromptAt ?? 0)
+function updatedAt(header: SessionHeader, metadata: SessionListMetadata | undefined, activity: number | null | undefined): number {
+  return Math.max(header.createdAt, metadata?.lastPromptAt ?? 0, activity ?? 0)
 }
 
 function listFields(header: SessionHeader): {

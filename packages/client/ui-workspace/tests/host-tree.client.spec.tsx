@@ -87,4 +87,19 @@ describe('attached Host workspace tree', () => {
     view.rerender(<HostWorkspaceTree {...face} query="absent" />)
     expect(screen.getByText('No matches')).toBeTruthy()
   })
+
+  it('moves updated remote sessions first while retaining pins and workspace membership', () => {
+    const face = props()
+    const view = render(<HostWorkspaceTree {...face} />)
+    const titles = () => within(view.container.querySelector('[data-host-workspace="sglang"]') as HTMLElement)
+      .getAllByRole('treeitem').map(row => row.textContent)
+    expect(titles()[1]).toContain('newer')
+    const list = face.useSessions(value => value)
+    const updated = { ...list, byId: { ...list.byId, [sid('older')]: { ...list.byId[sid('older')]!, updatedAt: now } } }
+    const useSessions: HostWorkspaceTreeProps['useSessions'] = selector => selector(updated)
+    view.rerender(<HostWorkspaceTree {...face} useSessions={useSessions} />)
+    expect(titles()[1]).toContain('older')
+    view.rerender(<HostWorkspaceTree {...face} useSessions={useSessions} pinnedSessionIds={[sid('newer')]} />)
+    expect(titles()[1]).toContain('newer')
+  })
 })

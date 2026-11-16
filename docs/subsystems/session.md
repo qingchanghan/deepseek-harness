@@ -1149,14 +1149,14 @@ Source: [`packages/core/session/src/index.ts`](../../packages/core/session/src/i
 
 #### `api-session/activity` — emit
 
-One user-authored durable message advanced Session list activity.
+One committed conversation event advanced Session list activity.
 
 ```ts cordis-catalog
 /**
- * One user-authored durable message advanced Session list activity.
+ * One committed conversation event advanced Session list activity.
  * @mode emit
  * @param sessionId - addressed Session identity.
- * @param updatedAt - durable message time used for list ordering.
+ * @param updatedAt - committed activity time used for list ordering.
  */
 'api-session/activity'(sessionId: SessionId, updatedAt: number): void
 ```

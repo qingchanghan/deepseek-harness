@@ -756,9 +756,9 @@ export class SessionManager {
   }
 
   /**
-   * Advance Session-list activity from one user-authored durable message.
+   * Advance Session-list activity from one committed conversation event.
    * @param sessionId - Session whose activity changed.
-   * @param updatedAt - durable message timestamp.
+   * @param updatedAt - committed activity timestamp.
    */
   handleSessionActivity(sessionId: SessionId, updatedAt: number): void {
     this.recordMutation({ kind: 'activity', sessionId, updatedAt })
@@ -807,7 +807,7 @@ export class SessionManager {
         ...summary,
         // Cached list hints can precede a history opening or control update.
         blank: this.effectiveBlank(summary) && metadata?.blank !== false,
-        updatedAt: Math.max(summary.updatedAt, metadata?.lastPromptAt ?? 0),
+        updatedAt: Math.max(summary.updatedAt, metadata?.lastPromptAt ?? 0, projectionValues?.sessionActivity ?? 0),
         ...(typeof title === 'string' && title !== '' ? { title } : {}),
         ...(projectionValues === undefined ? {} : { projectionValues }),
       }
