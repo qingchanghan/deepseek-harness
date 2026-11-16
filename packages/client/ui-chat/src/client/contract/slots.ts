@@ -7,7 +7,7 @@ import type { FileAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import type { InboxState } from '@deepseek-ai/dsh-agent/types'
 import type {
   CommandNode, CompactionSummaryNode, ConversationLocationDataStore, ConversationTurnDataMap,
-  ConversationGroupData, GroupSnapshot,
+  ConversationGroupData, ConversationTimelineSnapshot, GroupSnapshot,
   MessageImageLoader, MessageImageSource, MessageImagesOwnerProps, RenderEntry, TurnLocation, UserTextFacts, UserTextInput,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {
@@ -137,6 +137,13 @@ export interface ChatFileMentions {
    * @returns link resolver when available.
    */
   forClosing(owner: TurnTailOwnerProps, sessionId: SessionId): MarkdownFileMentions | undefined
+  /**
+   * Suggest recorded absolute targets for a relative file link whose workspace target is missing.
+   * @param path - parsed link path without line anchors.
+   * @param timeline - loaded history of the addressed Session.
+   * @returns candidates requiring Host existence checks; multiple existing targets are ambiguous.
+   */
+  candidates(path: string, timeline: ConversationTimelineSnapshot): readonly string[]
 }
 
 declare module '@deepseek-ai/cordis' {

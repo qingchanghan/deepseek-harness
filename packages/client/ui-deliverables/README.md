@@ -63,6 +63,9 @@ The closing prose links produced or delivered paths: an inline-code token resolv
 <a id="understand-the-implementation"></a>
 ## Understand the implementation
 
+For explicit relative file links, `chatFileMentions.candidates` reads successful output targets across loaded turns. It matches exact path suffixes and argument aliases; a link with a directory prefix can also name a sibling of a recorded file in that directory. Bare filenames never invent sibling targets. Chat checks the owning Host and accepts exactly one existing candidate only when the workspace target is absent.
+
+
 <details>
 <summary>Implementation internals — click to expand</summary>
 

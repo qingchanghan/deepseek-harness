@@ -28,6 +28,7 @@ import { ReviewTab, type ReviewInjected } from './ReviewTab.tsx'
 import { CHANGES_REVIEW_ID, changesReviewDefinition } from './review-definition.ts'
 import { createReviewStore } from './review-store.ts'
 import { en, NS, zh, type DeliverablesKey } from './locales.ts'
+import { fileLinkCandidates } from './file-link-candidates.ts'
 import {
   deliverablesDefinition, presentedForClosing, producedFileMentions, selectProducedFiles,
 } from './turn-deliverables.ts'
@@ -101,6 +102,7 @@ export function apply(ctx: ClientContext): void {
   // The prose side of the same vocabulary: the chat view reaches this face
   // via ctx.get, so its absence — this plugin composed out — is the off state.
   const mentions: ChatFileMentions = {
+    candidates: fileLinkCandidates,
     forClosing(owner) {
       const paths = selectProducedFiles(owner)
       const presented = presentedForClosing(owner)

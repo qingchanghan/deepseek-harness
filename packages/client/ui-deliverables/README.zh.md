@@ -63,6 +63,9 @@ Web 的 `standard`、`ptc` 与 `cordis` preset 提供 `present`，用于声明�
 <a id="understand-the-implementation"></a>
 ## 理解实现
 
+对于显式相对文件链接，`chatFileMentions.candidates` 从已加载轮次的成功输出记录中读取目标路径，匹配完整路径后缀和参数别名；带目录前缀的链接也可匹配该目录中已记录文件的同级文件。单独文件名不会生成同级候选。仅当工作区目标不存在时，Chat 才向所属 Host 检查候选，并要求恰好一个目标存在。
+
+
 <details>
 <summary>实现细节——点击展开</summary>
 

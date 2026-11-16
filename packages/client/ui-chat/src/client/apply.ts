@@ -12,7 +12,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-sidebar-browser/client'
 import type {} from '@deepseek-ai/dsh-client-ui-input-trigger/client'
 // The `file` entry of `SidebarRightResourceParamsMap`, which types `{ params: { line } }` below.
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar-documentpreview/client'
-import { fileAddressFor, isAbsoluteWorkspacePath, resolveWorkspacePath } from '@deepseek-ai/dsh-util-workspace-path'
+import { fileAddressFor } from '@deepseek-ai/dsh-util-workspace-path'
 import { writeClipboard } from '@deepseek-ai/dsh-client-ui-primitives'
 // Type-only service and declaration merges used by the apply world.
 import type {} from '@deepseek-ai/dsh-client-locale/client'
@@ -31,6 +31,7 @@ import { EMPTY_CHAT_SNAPSHOT } from './contract/snapshot.ts'
 import { ApprovalCommand } from './chat/ApprovalCommand.tsx'
 import { ChatView } from './chat/ChatView.tsx'
 import { FileCopyToast, type FileCopyNotice, type FileCopyToastInjected } from './chat/FileCopyToast.tsx'
+import { resolveChatFilePath } from './file-path.ts'
 import { ChatFlow } from './chat/ChatFlow.tsx'
 import { registerChatNodeRenderers } from './chat/register-node-renderers.ts'
 import { UserContent } from './chat/UserContent.tsx'
@@ -76,7 +77,7 @@ export const CHAT_NODE_INJECT: ChatNodeInjected = {
 /** Services required by the Chat target and its presentation registrations. */
 export const inject = [
   'slots', 'sessions', 'uiWorkspace', 'uiSession', 'uiConversation', 'locale',
-  'configForms', 'remote', 'remote.session', 'sidebarRight',
+  'configForms', 'remote', 'remote.session', 'remote.workspaceFiles', 'sidebarRight',
 ]
 
 /**
@@ -86,6 +87,13 @@ export const inject = [
 export function apply(ctx: Context): void {
   const fileCopyNotice = createSnapshotStore<FileCopyNotice | null>(null)
   let fileCopySeq = 0
+  let fileLifetime = new AbortController()
+  ctx.effect(() => () => { fileLifetime.abort() })
+  ctx.on('connection/reset', () => {
+    fileLifetime.abort()
+    fileLifetime = new AbortController()
+    fileCopyNotice.set(null)
+  })
   const quotaNotice = createSnapshotStore<QuotaNoticeState | null>(null)
   let quotaNoticeSeq = 0
   // Each hold is its own token, so a release can only drop the hold it was
@@ -260,22 +268,37 @@ export function apply(ctx: Context): void {
           // its top or at line 400, so the same tab is revealed and told where
           // to land.
           openFile: async (path, options) => {
+            const candidates = ctx.get('chatFileMentions')?.candidates(path, chat.getSnapshot().timeline) ?? []
+            const signal = fileLifetime.signal
+            const resolved = candidates.length === 0 ? path : await resolveChatFilePath(
+              (...args) => ctx.remote.workspaceFiles.stat(...args), sessionId, path, candidates, signal,
+            )
+            if (signal.aborted) return
+            if (resolved === undefined) {
+              fileCopyNotice.set({ seq: ++fileCopySeq, outcome: 'unresolved' })
+              return
+            }
             const cwd = ctx.sessions.list.getSnapshot().byId[sessionId]?.cwd
-            const url = fileAddressFor(sessionId, cwd, path)
+            const url = fileAddressFor(sessionId, cwd, resolved)
             if (options?.line === undefined) ctx.sidebarRight.openResource(url)
             else ctx.sidebarRight.openResource(url, { params: { line: options.line } })
             await Promise.resolve()
           },
           copyFilePath: async (path) => {
             const seq = ++fileCopySeq
-            const cwd = ctx.sessions.list.getSnapshot().byId[sessionId]?.cwd
-            const absolutePath = resolveWorkspacePath(cwd, path)
-            if (!isAbsoluteWorkspacePath(absolutePath)) {
+            const signal = fileLifetime.signal
+            const current = () => !signal.aborted && seq === fileCopySeq
+            const candidates = ctx.get('chatFileMentions')?.candidates(path, chat.getSnapshot().timeline) ?? []
+            const absolutePath = await resolveChatFilePath(
+              (...args) => ctx.remote.workspaceFiles.stat(...args), sessionId, path, candidates, signal,
+            )
+            if (!current()) return
+            if (absolutePath === undefined) {
               fileCopyNotice.set({ seq, outcome: 'unresolved' })
               return
             }
             const copied = await writeClipboard(absolutePath)
-            if (seq === fileCopySeq) fileCopyNotice.set({ seq, outcome: copied ? 'copied' : 'failed' })
+            if (current()) fileCopyNotice.set({ seq, outcome: copied ? 'copied' : 'failed' })
           },
           openExternalLink: (url) => {
             if (linkOpening.getSnapshot() === 'sidebar' && ctx.get('sidebarRightTabs')?.get('browser') !== undefined) {

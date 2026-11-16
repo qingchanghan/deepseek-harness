@@ -11,6 +11,8 @@ import {
 } from '@deepseek-ai/dsh-client-test-runtime'
 import type { SessionBehaviorOverrides } from '@deepseek-ai/dsh-client-test-runtime'
 import type { ClientRemote } from '@deepseek-ai/dsh-api-remotes/client'
+import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
+import { resolveWorkspacePath } from '@deepseek-ai/dsh-util-workspace-path'
 import {
   apply as applyConversation, inject as injectConversation,
   type GroupKey,
@@ -80,6 +82,13 @@ async function bench(initialSettings?: ChatSettings, withBrowserRegistry = true,
     () => Promise.resolve({ ok: true, value: { opened: true } }),
   )
   runtime.remote.provideNamespaces({ session: { openWorkspacePath } })
+  const stat = vi.fn<ClientRemote['workspaceFiles']['stat']>(async (sessionId, path) => {
+    const cwd = runtime.ctx.sessions.list.getSnapshot().byId[sessionId]?.cwd
+    return cwd === undefined
+      ? { ok: false, error: new RemoteError('workspace-file/not-found', 'missing', { path }) }
+      : { ok: true, value: { absolutePath: resolveWorkspacePath(cwd, path), version: 'v1' } }
+  })
+  runtime.remote.provideNamespaces({ workspaceFiles: { stat } })
   const openSession = vi.fn<(id: SessionId) => void>()
   runtime.ctx.provide('uiWorkspace', {
     openWorkspace: vi.fn(async (_workspaceId: WorkspaceId, beforeOpen: (id: SessionId) => void) => {
@@ -133,7 +142,7 @@ async function bench(initialSettings?: ChatSettings, withBrowserRegistry = true,
       const preference: object = row.inject!()
       return preference as LinkOpeningRowInjected
     },
-    runtime, chat, chatSettings, browserAvailable,
+    runtime, chat, chatSettings, browserAvailable, stat,
     layout, openWorkspacePath, sidebarRight, sidebarRightTabs, session, chatViewApi, chatFlowApi, rootReference, openSession,
   }
 }
@@ -174,6 +183,7 @@ describe('Chat inject API', () => {
       const injectedToast: object = toast.inject!()
       const feedback = injectedToast as FileCopyToastInjected
       const earlier = injected.copyFilePath('earlier.md')
+      await vi.waitFor(() => expect(writeText).toHaveBeenCalledTimes(1))
       await injected.copyFilePath('latest.md')
       const latest = feedback.hooks.notice.getSnapshot()
       first.reject(new Error('clipboard denied'))
@@ -216,6 +226,35 @@ describe('Chat inject API', () => {
       expect(feedback.hooks.notice.getSnapshot()).toBeNull()
       await b.chat.dispose()
       expect(b.runtime.slots.entries('shell.overlay').some(entry => entry.options.id === 'chat.file-copy')).toBe(false)
+    } finally {
+      vi.unstubAllGlobals()
+      await b.runtime.dispose()
+    }
+  })
+
+  it('uses the same verified remote target for copy and preview, and drops a lookup after reset', async () => {
+    const b = await bench()
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    vi.stubGlobal('navigator', { clipboard: { writeText } })
+    try {
+      const relative = 'run/metric.py'
+      const target = '/remote/output/run/metric.py'
+      b.runtime.ctx.provide('chatFileMentions', { forClosing: () => undefined, candidates: () => [target] })
+      b.stat.mockImplementation(async (_id, path) => path === target
+        ? { ok: true, value: { absolutePath: target, version: 'v1' } }
+        : { ok: false, error: new RemoteError('workspace-file/not-found', 'missing', { path }) })
+      const { injected } = b.chatViewApi(b.rootReference)
+      await injected.copyFilePath(relative)
+      expect(writeText).toHaveBeenCalledExactlyOnceWith(target)
+      await injected.openFile(relative)
+      expect(b.sidebarRight.openResource).toHaveBeenCalledExactlyOnceWith(`dsh-resource://file/session/root-1/${target}`)
+      const pending = Promise.withResolvers<Awaited<ReturnType<ClientRemote['workspaceFiles']['stat']>>>()
+      b.stat.mockReturnValueOnce(pending.promise)
+      const copy = injected.copyFilePath(relative)
+      b.runtime.ctx.emit('connection/reset')
+      pending.resolve({ ok: true, value: { absolutePath: target, version: 'v1' } })
+      await copy
+      expect(writeText).toHaveBeenCalledTimes(1)
     } finally {
       vi.unstubAllGlobals()
       await b.runtime.dispose()

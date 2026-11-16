@@ -35,6 +35,7 @@ import {
   selectProducedFiles, type DeliverablesTurnData,
 } from '../src/client/turn-deliverables.ts'
 import { apply, inject } from '../src/client/index.ts'
+import { fileLinkCandidates } from '../src/client/file-link-candidates.ts'
 import { en, zh } from '../src/client/locales.ts'
 import { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { SessionEvent } from '@deepseek-ai/dsh-session/types'
@@ -826,6 +827,27 @@ describe('producedFileMentions resolver', () => {
 
 
 describe('plugin registration', () => {
+  it('matches historical output paths and explicit directory siblings without guessing from bare names', () => {
+    const older = turnLocation(1, produced([2, '/outside/direct_e2e/RESULTS.md']))
+    const windows = turnLocation(2, produced([4, 'C:\\outside\\direct_e2e\\RESULTS.md']))
+    const timeline = { turnOrder: [1, 2], turns: new Map([[1, older], [2, windows]]) }
+    expect(fileLinkCandidates('direct_e2e/metric.py', timeline)).toEqual([
+      '/outside/direct_e2e/metric.py', 'C:\\outside\\direct_e2e\\metric.py',
+    ])
+    expect(fileLinkCandidates('RESULTS.md', timeline)).toEqual([
+      '/outside/direct_e2e/RESULTS.md', 'C:\\outside\\direct_e2e\\RESULTS.md',
+    ])
+    for (const path of ['metric.py', '../metric.py', 'another/metric.py', '/absolute/metric.py']) {
+      expect(fileLinkCandidates(path, timeline)).toEqual([])
+    }
+    const legacy = turnLocation(3, produced([5, 'relative/RESULTS.md']))
+    const alias = turnLocation(4, { produced: [{ seq: 6, path: '/else/report.txt', argumentPath: 'alias.txt' }] })
+    const delivered = turnLocation(5, { produced: [], presented: [{ seq: 7, index: 0, path: '/delivered/report.txt' }] })
+    const additional = { turnOrder: [3, 4, 5, 6], turns: new Map([[3, legacy], [4, alias], [5, delivered], [6, turnLocation(6)]]) }
+    expect(fileLinkCandidates('alias.txt', additional)).toEqual(['/else/report.txt'])
+    expect(fileLinkCandidates('./report.txt', additional)).toEqual(['/else/report.txt', '/delivered/report.txt'])
+    expect(fileLinkCandidates('', additional)).toEqual([])
+  })
   it('registers the tail entry and fiber disposal removes it', async () => {
     const ctx = new Context()
     await ctx.plugin(SlotRegistry).await()

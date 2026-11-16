@@ -1,5 +1,6 @@
 /** Cold-replayed Markdown references open Session files through the shipped Web composition. */
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { chromium, type Browser, type Page } from 'playwright'
@@ -18,7 +19,7 @@ const SNAPSHOT_DIR = fileURLToPath(new URL('../../../snapshots/web/markdown-file
 const MODE = webSnapshotMode()
 
 /** Build live test input with a parent-path link and a read result naming the same Host file. */
-function parentPathFixture(path: string): string {
+function fileLinksFixture(path: string, writtenLink?: string): string {
   const session = Session.create(SessionId('parent-file-links-source'))
   session.append('turn/start', { turn: 1 })
   const user = session.append('user/message', createUserMessage({
@@ -27,17 +28,18 @@ function parentPathFixture(path: string): string {
   session.append('session/title', { title: 'Parent file links', messageSeqs: [user.seq], source: { kind: 'fallback' } })
   session.append('step/start', { turn: 1, step: 1 })
   const callId = ToolCallId('parent-file-read')
-  const args = JSON.stringify({ file_path: path, offset: 24, limit: 7 })
+  const name = writtenLink === undefined ? 'read' : 'write'
+  const args = JSON.stringify(writtenLink === undefined ? { file_path: path, offset: 24, limit: 7 } : { file_path: path, content: 'report\n' })
   session.append('assistant/message', {
     turn: 1, step: 1, stream: [],
     message: createAssistantMessage({
-      content: [{ type: 'tool-call', id: callId, name: 'read', arguments: args }],
+      content: [{ type: 'tool-call', id: callId, name, arguments: args }],
       source: { provider: 'deepseek-official', model: 'deepseek-v4-flash' },
     }),
   }, { surfaceOp: 'append' })
-  const call = session.append('tool/call', { turn: 1, step: 1, callId, name: 'read', arguments: args })
+  const call = session.append('tool/call', { turn: 1, step: 1, callId, name, arguments: args })
   session.append('tool/result', {
-    turn: 1, step: 1, meta: { path: '{{cwd}}/parent.txt' },
+    turn: 1, step: 1, meta: { path: writtenLink === undefined ? '{{cwd}}/parent.txt' : path },
     message: createToolResultMessage({ callId, content: [{ type: 'text', text: 'parent line 24\n' }], isError: false }),
   }, { surfaceOp: 'append', sourceEventSeqs: [call.seq] })
   session.append('step/end', { turn: 1, step: 1 })
@@ -45,7 +47,9 @@ function parentPathFixture(path: string): string {
   session.append('assistant/message', {
     turn: 1, step: 2, stream: [],
     message: createAssistantMessage({
-      content: [{ type: 'text', text: `[Parent file:24–30](<${path}#L24-L30>) · [Parent file:30](<${path}#L30>)` }],
+      content: [{ type: 'text', text: writtenLink === undefined
+        ? `[Parent file:24–30](<${path}#L24-L30>) · [Parent file:30](<${path}#L30>)`
+        : `[metric.py](<${writtenLink}>)` }],
       source: { provider: 'deepseek-official', model: 'deepseek-v4-flash' },
     }),
   }, { surfaceOp: 'append' })
@@ -156,7 +160,7 @@ describe('web e2e: Markdown file links', () => {
     const path = `../${basename(scaffold.workspaceCwd)}/parent.txt`
     await writeFile(join(scaffold.workspaceCwd, 'parent.txt'),
       Array.from({ length: 60 }, (_, i) => `parent line ${i + 1}\n`).join(''))
-    const id = await seedSession(scaffold, parentPathFixture(path), 'parent-file-links')
+    const id = await seedSession(scaffold, fileLinksFixture(path), 'parent-file-links')
     await page.reload({ waitUntil: 'load' })
     const workspace = page.getByRole('treeitem').first()
     await workspace.waitFor()
@@ -199,5 +203,31 @@ describe('web e2e: Markdown file links', () => {
     expect(await tabs.allTextContents()).toEqual(['parent.txt', 'parent.txt'])
     expect(tripwire.pageErrors).toEqual([])
     expect(tripwire.warnings).toEqual([])
+  })
+
+  it('copies and previews a relative output link outside the Session workspace', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-outside-output-file'))
+    const outside = await realpath(await mkdtemp(join(tmpdir(), 'dsh-output-file-links-')))
+    try {
+      await mkdir(join(outside, 'run'))
+      await writeFile(join(outside, 'run/RESULTS.md'), 'report\n')
+      await writeFile(join(outside, 'run/metric.py'), 'print("metric")\n')
+      const id = await seedSession(scaffold, fileLinksFixture(join(outside, 'run/RESULTS.md'), 'run/metric.py'), 'output-file-links')
+      await page.reload({ waitUntil: 'load' })
+      const workspace = page.getByRole('treeitem').first()
+      await workspace.waitFor()
+      if (await workspace.getAttribute('aria-expanded') !== 'true') await workspace.click()
+      await page.locator(`[data-row-key="session:${id}"]`).click()
+      const source = page.getByRole('button', { name: 'metric.py', exact: true })
+      await source.click({ button: 'right' })
+      await page.getByRole('menuitem', { name: 'Copy absolute path', exact: true }).click()
+      await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(join(outside, 'run/metric.py'))
+      await source.click()
+      await expect.poll(() => page.locator('[data-textpreview-path]').textContent()).toBe(join(outside, 'run/metric.py'))
+      await expect.poll(() => page.locator('[data-code-preview]').textContent()).toContain('print("metric")')
+      expect(tripwire.pageErrors).toEqual([])
+    } finally {
+      await rm(outside, { recursive: true, force: true })
+    }
   })
 })
