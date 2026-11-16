@@ -273,6 +273,8 @@ type SessionTreeProps = Pick<
   workspaceReady: boolean
   /** Grouping, ordering, and filter changes replace the view without row motion. */
   animationResetKey: string
+  /** Apply the same ordering choice to Workspace groups and their Sessions. */
+  orderBy: SessionOrderBy
   /** Nest Workspaces under their nearest registered ancestors. */
   nestWorkspaces: boolean
   /** Explicit persisted group expansion, including descendants in tree mode. */
@@ -317,7 +319,7 @@ function EmptySessions({ rowState, onLeaveArchivedOnly, t }: Pick<SessionTreePro
 function SessionTree({
   list, useSessionStatus, startSession, open, workspaces, ungroupedSessionIds,
   rowState, onLeaveArchivedOnly,
-  workspaceReady, animationResetKey, usePanelInfo,
+  workspaceReady, animationResetKey, orderBy, usePanelInfo,
   onRenameRequest, onDeleteRequest, onSessionRenameRequest,
   renderSlot,
   insertWorkspaceBefore,
@@ -376,8 +378,10 @@ function SessionTree({
     () => deriveGroups(list, workspaces, rowState, statuses, {
       expandedGroups,
       ungroupedOrder: ungroupedSessionIds,
+      orderBy,
+      parentGroups: parents,
     }),
-    [list, workspaces, rowState, statuses, expandedGroups, ungroupedSessionIds],
+    [list, workspaces, rowState, statuses, expandedGroups, ungroupedSessionIds, orderBy, parents],
   )
   useEffect(() => {
     for (let key = revealGroup; key !== undefined; key = parents.get(key)) {
@@ -438,8 +442,8 @@ function SessionTree({
     workspaceDropCommitted.current = true
     setWorkspaceDrag(null)
     const owner = parents.get(activeDrag.workspaceId)
-    const siblings = workspaces.filter(workspace => parents.get(workspace.workspaceId) === owner)
-    const rowIndex = siblings.findIndex(workspace => workspace.workspaceId === over.id)
+    const siblings = groups.filter(group => group.workspaceId !== undefined && parents.get(group.key) === owner)
+    const rowIndex = siblings.findIndex(group => group.workspaceId === over.id)
     if (rowIndex === -1) return
     const anchor = over.half === 'before' ? over.id : siblings[rowIndex + 1]?.workspaceId
     if (anchor === activeDrag.workspaceId) return
@@ -1304,6 +1308,7 @@ export function WorkspaceBrowser({
       )
       : (
         <SessionTree
+          orderBy={orderBy}
           usePanelInfo={usePanelInfo}
           list={list}
           shortcuts={shortcuts}
@@ -1322,7 +1327,10 @@ export function WorkspaceBrowser({
           onLeaveArchivedOnly={leaveArchivedOnly}
           startSession={startSession}
           open={guardedOpen}
-          insertWorkspaceBefore={insertWorkspaceBefore}
+          insertWorkspaceBefore={async (workspaceId, anchor) => {
+            await insertWorkspaceBefore(workspaceId, anchor)
+            actions.setOrderBy('manual', activeSessionOrders)
+          }}
           revealSessionId={revealSessionId}
           onSessionRevealed={acknowledgeSessionReveal}
           home={home}

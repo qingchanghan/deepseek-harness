@@ -66,6 +66,18 @@ const rowState = (options: {
 const noRows = rowState()
 
 describe('owningGroupKey', () => {
+  it('orders collapsed groups by visible session activity, retaining manual ties and nested parents', () => {
+    const sessions = list(summary('old', 1), summary('new', 10), summary('loose', 5), summary('hidden', 100))
+    const workspaces = [workspace('old', ['old', 'hidden']), workspace('parent', []), workspace('new', ['new']), workspace('empty', [])]
+    const rows = rowState({ archived: ['hidden'] })
+    const groups = deriveGroups(sessions, workspaces, rows, noAttention, {
+      expandedGroups: [], orderBy: 'updated', parentGroups: new Map([['new', 'parent']]),
+    })
+    expect(groups.map(group => group.key)).toEqual(['parent', 'new', '', 'old', 'empty'])
+    expect(groups.every(group => group.sessions.length === 0)).toBe(true)
+    expect(deriveGroups(sessions, workspaces, rows, noAttention, { expandedGroups: [], orderBy: 'manual' })
+      .map(group => group.key)).toEqual(['old', 'parent', 'new', 'empty', ''])
+  })
   it('keeps each Host selection out of the other Host Ungrouped folder', () => {
     const catalog = list(summary('local', 1), { ...summary('remote', 2), host: { id: 'h20', name: 'H20' } })
     const localActive = withMain(catalog, sid('local'))

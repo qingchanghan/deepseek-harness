@@ -20,7 +20,7 @@ export function HostWorkspaceTree({ hostId, label, workspaces, archivedSessionId
   const current = panelActive ? undefined : Object.values(list.byId).find(session => (session.retainedBy.mainView ?? 0) > 0)?.id
   const ordered = workspaces.map(workspace => ({ ...workspace, sessionIds: orderByRecency(workspace.sessionIds, list.byId) }))
   const groups = deriveGroups(list, ordered, { archivedSessionIds, pinnedSessionIds, archivedFilter: 'default' }, statuses,
-    { expandedGroups: [...workspaces.map(workspace => workspace.workspaceId), UNGROUPED_KEY] }, hostId)
+    { expandedGroups: [...workspaces.map(workspace => workspace.workspaceId), UNGROUPED_KEY], orderBy: 'updated' }, hostId)
   const needle = query.toLocaleLowerCase()
   const visible = groups.flatMap((group) => {
     const sessions = needle === '' ? group.sessions : group.sessions.filter(session => session.title.toLocaleLowerCase().includes(needle))

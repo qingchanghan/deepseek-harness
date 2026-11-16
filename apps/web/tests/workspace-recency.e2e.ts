@@ -1,5 +1,5 @@
 /** Recency and saved manual order through the shipped Web composition. */
-import { readFile } from 'node:fs/promises'
+import { mkdir, readFile } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { chromium, type Browser, type Page, type WebSocketRoute } from 'playwright'
@@ -162,8 +162,30 @@ describe('web e2e: workspace recency', () => {
     await expect.poll(titles).toEqual(['New Session', ...TITLES])
     await pick('Manual')
     await expect.poll(titles).toEqual(['New Session', ...TITLES])
-    await assertFixtureInventory(SNAPSHOT_DIR, ['sidebar.expected.md', 'manual-blank.expected.md'])
+    await assertFixtureInventory(SNAPSHOT_DIR, ['sidebar.expected.md', 'manual-blank.expected.md', 'workspace-order.expected.md'])
     expect(tripwire.pageErrors).toEqual([])
     expect(tripwire.warnings).toEqual([])
+  })
+
+  it('orders collapsed workspaces by the activity in their recorded sessions', async () => {
+    const fixture = await readFile(SEED, 'utf8')
+    const now = Date.now()
+    for (const [index, name] of ['recency-alpha', 'recency-beta'].entries()) {
+      const path = join(scaffold.workspaceCwd, name)
+      await mkdir(path)
+      const workspace = await scaffold.ctx.workspaceRegistry.create(path)
+      const id = await seedSession({ ...scaffold, workspaceCwd: path }, fixture, name, undefined, { createdAt: now + (index + 1) * 60_000 })
+      await workspace.attachSession(id)
+    }
+    const warningStart = tripwire.warnings.length
+    await page.reload({ waitUntil: 'load' })
+    acknowledgeReloadConnectionLoss(tripwire, warningStart)
+    await page.getByRole('button', { name: 'View options' }).click()
+    await page.getByRole('menuitem', { name: 'Last updated', exact: true }).click()
+    const groups = () => page.locator('[role="treeitem"][aria-expanded] [class*="title"]').allTextContents()
+    await expect.poll(groups).toEqual(['recency-beta', 'recency-alpha', basename(scaffold.workspaceCwd)])
+    await compareOrRefreshGolden(join(SNAPSHOT_DIR, 'workspace-order.expected.md'),
+      (await groups()).map(name => `- ${name === basename(scaffold.workspaceCwd) ? '{{workspace}}' : name}`).join('\n'), MODE)
+    expect(tripwire.pageErrors).toEqual([])
   })
 })

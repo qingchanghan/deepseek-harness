@@ -1,6 +1,6 @@
 /**
  * Derives the workspace browser tree from caller-projected Workspace and
- * Session order. Unassigned Sessions trail under Ungrouped; only the selected
+ * Session order. Unassigned Sessions appear under Ungrouped; only the selected
  * blank Session remains visible.
  */
 import {
@@ -109,6 +109,10 @@ export interface SearchResultSet {
 /** Viewing state consumed by the derivation. */
 export interface TreeView {
   expandedGroups: readonly string[]
+  /** Updated mode orders groups by their latest visible nonblank Session activity. */
+  orderBy?: SessionOrderBy
+  /** Registered ancestors in the nested view; descendant activity also advances their group. */
+  parentGroups?: ReadonlyMap<string, string | undefined>
   /** Browser-local order for Sessions without a backing Workspace account. */
   ungroupedOrder?: readonly string[]
 }
@@ -433,7 +437,7 @@ function sessionNode(
  * @param workspaces - real Workspaces in Host group order with caller-projected Session order.
  * @param rowState - registry-global pin and archive sets plus the archived filter.
  * @param statuses - unified UI status by Session.
- * @param view - local expansion arrays.
+ * @param view - local expansion, group ordering, and optional nested ancestry.
  * @param hostId - selected attached Host; omitted selects Local.
  * @returns group sections in render order.
  */
@@ -453,7 +457,20 @@ export function deriveGroups(
     ? undefined
     : owningGroupKey(workspaces, current)
   const groups: GroupNode[] = []
-  for (const g of groupByWorkspace(list, workspaces, archived, rowState.archivedFilter, view.ungroupedOrder, hostId)) {
+  const grouped = groupByWorkspace(list, workspaces, archived, rowState.archivedFilter, view.ungroupedOrder, hostId)
+  if (view.orderBy === 'updated') {
+    const activity = new Map(grouped.map(group => [group.key,
+      group.sessions.reduce((latest, session) => session.blank ? latest : Math.max(latest, session.updatedAt), 0),
+    ]))
+    for (const group of grouped) {
+      const latest = activity.get(group.key) ?? 0
+      for (let parent = view.parentGroups?.get(group.key); parent !== undefined; parent = view.parentGroups?.get(parent)) {
+        activity.set(parent, Math.max(activity.get(parent) ?? 0, latest))
+      }
+    }
+    grouped.sort((a, b) => (activity.get(b.key) ?? 0) - (activity.get(a.key) ?? 0))
+  }
+  for (const g of grouped) {
     const expanded = expandedGroups.has(g.key)
     groups.push({
       key: g.key,

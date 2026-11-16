@@ -102,4 +102,17 @@ describe('attached Host workspace tree', () => {
     view.rerender(<HostWorkspaceTree {...face} useSessions={useSessions} pinnedSessionIds={[sid('newer')]} />)
     expect(titles()[1]).toContain('newer')
   })
+
+  it('moves the owning workspace ahead of other workspaces when a remote session updates', () => {
+    const face = { ...props(), workspaces: [workspace('sglang', ['older']), workspace('vllm', ['newer'])] }
+    const view = render(<HostWorkspaceTree {...face} />)
+    const groups = () => [...view.container.querySelectorAll('[data-host-workspace]')].map(group => group.getAttribute('data-host-workspace'))
+    expect(groups().indexOf('vllm')).toBeLessThan(groups().indexOf('sglang'))
+    fireEvent.click(screen.getByText('sglang').closest('[role="treeitem"]')!)
+    const list = face.useSessions(value => value)
+    const updated = { ...list, byId: { ...list.byId, [sid('older')]: { ...list.byId[sid('older')]!, updatedAt: now } } }
+    view.rerender(<HostWorkspaceTree {...face} useSessions={selector => selector(updated)} />)
+    expect(groups()[0]).toBe('sglang')
+    expect(screen.queryByText('older')).toBeNull()
+  })
 })
