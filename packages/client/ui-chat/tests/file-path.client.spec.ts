@@ -52,4 +52,20 @@ describe('conversation file path resolution', () => {
     expect(await resolveChatFilePath(stat, sessionId, '/absolute', [], cancelled.signal)).toBeUndefined()
     expect(stat).not.toHaveBeenCalled()
   })
+  it('discards a candidate that arrives after its connection was cancelled', async () => {
+    const controller = new AbortController()
+    const candidate = Promise.withResolvers<Awaited<ReturnType<ClientRemote['workspaceFiles']['stat']>>>()
+    const started = Promise.withResolvers<undefined>()
+    const stat = statFor({})
+    stat.mockImplementation(async (_session, path) => {
+      if (path === 'file') return { ok: false, error: new RemoteError('workspace-file/not-found', 'missing', { path }) }
+      started.resolve(undefined)
+      return candidate.promise
+    })
+    const resolved = resolveChatFilePath(stat, sessionId, 'file', ['/remote/file'], controller.signal)
+    await started.promise
+    controller.abort()
+    candidate.resolve({ ok: true, value: { absolutePath: '/remote/file', version: '1' } })
+    expect(await resolved).toBeUndefined()
+  })
 })
