@@ -1,0 +1,3 @@
+- text: log
+- button "Copy"
+- code: "varlen benchmark completed latency: {{duration}}"

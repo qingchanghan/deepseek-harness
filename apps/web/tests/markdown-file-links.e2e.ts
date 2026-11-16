@@ -18,8 +18,8 @@ import { expandOwningTurnProcess, newEnglishPage, saveFailureShot } from './supp
 const SNAPSHOT_DIR = fileURLToPath(new URL('../../../snapshots/web/markdown-file-links', import.meta.url))
 const MODE = webSnapshotMode()
 
-/** Build live test input with a parent-path link and a read result naming the same Host file. */
-function fileLinksFixture(path: string, writtenLink?: string): string {
+/** Seed read-card links or a successful output with explicit Markdown references. */
+function fileLinksFixture(path: string, writtenReply?: string): string {
   const session = Session.create(SessionId('parent-file-links-source'))
   session.append('turn/start', { turn: 1 })
   const user = session.append('user/message', createUserMessage({
@@ -28,8 +28,8 @@ function fileLinksFixture(path: string, writtenLink?: string): string {
   session.append('session/title', { title: 'Parent file links', messageSeqs: [user.seq], source: { kind: 'fallback' } })
   session.append('step/start', { turn: 1, step: 1 })
   const callId = ToolCallId('parent-file-read')
-  const name = writtenLink === undefined ? 'read' : 'write'
-  const args = JSON.stringify(writtenLink === undefined ? { file_path: path, offset: 24, limit: 7 } : { file_path: path, content: 'report\n' })
+  const name = writtenReply === undefined ? 'read' : 'write'
+  const args = JSON.stringify(writtenReply === undefined ? { file_path: path, offset: 24, limit: 7 } : { file_path: path, content: 'report\n' })
   session.append('assistant/message', {
     turn: 1, step: 1, stream: [],
     message: createAssistantMessage({
@@ -39,7 +39,7 @@ function fileLinksFixture(path: string, writtenLink?: string): string {
   }, { surfaceOp: 'append' })
   const call = session.append('tool/call', { turn: 1, step: 1, callId, name, arguments: args })
   session.append('tool/result', {
-    turn: 1, step: 1, meta: { path: writtenLink === undefined ? '{{cwd}}/parent.txt' : path },
+    turn: 1, step: 1, meta: { path: writtenReply === undefined ? '{{cwd}}/parent.txt' : path },
     message: createToolResultMessage({ callId, content: [{ type: 'text', text: 'parent line 24\n' }], isError: false }),
   }, { surfaceOp: 'append', sourceEventSeqs: [call.seq] })
   session.append('step/end', { turn: 1, step: 1 })
@@ -47,9 +47,8 @@ function fileLinksFixture(path: string, writtenLink?: string): string {
   session.append('assistant/message', {
     turn: 1, step: 2, stream: [],
     message: createAssistantMessage({
-      content: [{ type: 'text', text: writtenLink === undefined
-        ? `[Parent file:24–30](<${path}#L24-L30>) · [Parent file:30](<${path}#L30>)`
-        : `[metric.py](<${writtenLink}>)\n\n![Output graph](run/plot.png)` }],
+      content: [{ type: 'text', text: writtenReply
+        ?? `[Parent file:24–30](<${path}#L24-L30>) · [Parent file:30](<${path}#L30>)` }],
       source: { provider: 'deepseek-official', model: 'deepseek-v4-flash' },
     }),
   }, { surfaceOp: 'append' })
@@ -72,7 +71,9 @@ describe('web e2e: Markdown file links', () => {
   let tripwire: ReturnType<typeof watchConsole>
 
   beforeAll(async () => {
-    scaffold = await launchWebScaffold({})
+    scaffold = await launchWebScaffold({
+      extraOverlayPath: fileURLToPath(new URL('./pin-browse-picker.overlay.yml', import.meta.url)),
+    })
     await mkdir(join(scaffold.workspaceCwd, 'src'))
     await mkdir(join(scaffold.workspaceCwd, 'other'))
     await writeFile(join(scaffold.workspaceCwd, 'src/example.txt'),
@@ -215,7 +216,8 @@ describe('web e2e: Markdown file links', () => {
       await writeFile(join(outside, 'run/plot.png'), Buffer.from(
         'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64',
       ))
-      const id = await seedSession(scaffold, fileLinksFixture(join(outside, 'run/RESULTS.md'), 'run/metric.py'), 'output-file-links')
+      const id = await seedSession(scaffold, fileLinksFixture(join(outside, 'run/RESULTS.md'),
+        '[metric.py](run/metric.py)\n\n![Output graph](run/plot.png)'), 'output-file-links')
       await page.reload({ waitUntil: 'load' })
       const workspace = page.getByRole('treeitem').first()
       await workspace.waitFor()
@@ -236,6 +238,41 @@ describe('web e2e: Markdown file links', () => {
       await expect.poll(() => dialog.getByRole('img').evaluate(element => (element as HTMLImageElement).naturalWidth)).toBe(1)
       await page.keyboard.press('Escape')
       expect(tripwire.pageErrors).toEqual([])
+    } finally {
+      await rm(outside, { recursive: true, force: true })
+    }
+  })
+
+  it('previews and copies an output in another directory under a recorded ancestor', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-cross-directory-file'))
+    const outside = await realpath(await mkdtemp(join(tmpdir(), 'dsh-cross-directory-links-')))
+    try {
+      const recorded = join(outside, 'dsa_agg_offload/direct_e2e_20261116/RESULTS.md')
+      const relative = 'dsa_agg_offload/mqa_varlen_bench_20261116/flag/varlen.log'
+      const absolute = join(outside, relative)
+      await mkdir(join(outside, 'dsa_agg_offload/direct_e2e_20261116'), { recursive: true })
+      await mkdir(join(outside, 'dsa_agg_offload/mqa_varlen_bench_20261116/flag'), { recursive: true })
+      await writeFile(recorded, 'report\n')
+      await writeFile(absolute, 'varlen benchmark completed\nlatency: 1.25 ms\n')
+      const id = await seedSession(scaffold, fileLinksFixture(recorded, `[varlen.log](<${relative}>)`), 'cross-directory-file-links')
+      await page.reload({ waitUntil: 'load' })
+      const workspace = page.getByRole('treeitem').first()
+      await workspace.waitFor()
+      if (await workspace.getAttribute('aria-expanded') !== 'true') await workspace.click()
+      await page.locator(`[data-row-key="session:${id}"]`).click()
+      const source = page.getByRole('button', { name: 'varlen.log', exact: true })
+      await source.click()
+      await expect.poll(() => page.locator('[data-textpreview-path]').textContent()).toBe(absolute)
+      await expect.poll(() => page.locator('[data-code-preview]').textContent()).toContain('varlen benchmark completed')
+      await compareOrRefreshGolden(
+        fileURLToPath(new URL('./expected/markdown-file-links/cross-directory-preview.expected.md', import.meta.url)),
+        await captureStableAria(page, '[data-code-preview]', outside), MODE,
+      )
+      await source.click({ button: 'right' })
+      await page.getByRole('menuitem', { name: 'Copy absolute path', exact: true }).click()
+      await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(absolute)
+      expect(tripwire.pageErrors).toEqual([])
+      expect(tripwire.warnings).toEqual([])
     } finally {
       await rm(outside, { recursive: true, force: true })
     }

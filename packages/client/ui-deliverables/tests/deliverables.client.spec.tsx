@@ -827,6 +827,33 @@ describe('producedFileMentions resolver', () => {
 
 
 describe('plugin registration', () => {
+  it('finds cross-directory candidates under recorded shared ancestors', () => {
+    const older = turnLocation(1, produced([2, '/outside/dsa_agg_offload/direct_e2e/RESULTS.md']))
+    const windows = turnLocation(2, { produced: [], presented: [{ seq: 4, index: 0, path: 'C:\\outside\\dsa_agg_offload\\direct_e2e\\RESULTS.md' }] })
+    const timeline = { turnOrder: [1, 2], turns: new Map([[1, older], [2, windows]]) }
+    expect(fileLinkCandidates('dsa_agg_offload/mqa_varlen/flag/varlen.log', timeline)).toEqual([
+      '/outside/dsa_agg_offload/mqa_varlen/flag/varlen.log',
+      'C:\\outside\\dsa_agg_offload\\mqa_varlen\\flag\\varlen.log',
+    ])
+    expect(fileLinkCandidates('./dsa_agg_offload\\mqa_varlen\\flag\\varlen.log', timeline)).toEqual([
+      '/outside/dsa_agg_offload/mqa_varlen/flag/varlen.log',
+      'C:\\outside\\dsa_agg_offload\\mqa_varlen\\flag\\varlen.log',
+    ])
+    for (const path of ['varlen.log', 'agg_offload/varlen.log', 'dsa_agg_offload_extra/varlen.log', 'dsa_agg_offload/../varlen.log']) {
+      expect(fileLinkCandidates(path, timeline)).toEqual([])
+    }
+  })
+
+  it('keeps every matching ancestor candidate for Host ambiguity checks', () => {
+    const older = turnLocation(1, produced([2, '/outside/run/nested/run/RESULTS.md']))
+    const duplicate = turnLocation(2, produced([4, '/outside/run/another/RESULTS.md']))
+    const sameNameFile = turnLocation(3, produced([6, '/unrelated/run']))
+    const timeline = { turnOrder: [1, 2, 3], turns: new Map([[1, older], [2, duplicate], [3, sameNameFile]]) }
+    expect(fileLinkCandidates('run/next/varlen.log', timeline)).toEqual([
+      '/outside/run/next/varlen.log', '/outside/run/nested/run/next/varlen.log',
+    ])
+  })
+
   it('matches historical output paths and explicit directory siblings without guessing from bare names', () => {
     const older = turnLocation(1, produced([2, '/outside/direct_e2e/RESULTS.md']))
     const windows = turnLocation(2, produced([4, 'C:\\outside\\direct_e2e\\RESULTS.md']))

@@ -63,7 +63,7 @@ The closing prose links produced or delivered paths: an inline-code token resolv
 <a id="understand-the-implementation"></a>
 ## Understand the implementation
 
-For explicit relative file links, `chatFileMentions.candidates` reads successful output targets across loaded turns. It matches exact path suffixes and argument aliases; a link with a directory prefix can also name a sibling of a recorded file in that directory. Bare filenames never invent sibling targets. Chat checks the owning Host and accepts exactly one existing candidate only when the workspace target is absent.
+For explicit relative file links, `chatFileMentions.candidates` reads successful output targets across loaded turns. It matches exact path suffixes and argument aliases; a link's first directory may also match any ancestor directory of a recorded file, including links into a different descendant directory. Matches use complete directory names and retain every candidate when an ancestor name repeats. Bare filenames never invent targets, and paths containing `..` use only normal workspace resolution. Chat checks the owning Host and accepts exactly one existing candidate only when the workspace target is absent; missing, inaccessible, or ambiguous candidates remain unresolved.
 
 
 <details>
@@ -122,7 +122,7 @@ These limits define the current deliverables vocabulary. They are current packag
 - **Native opening needs a Host desktop** — without one the review tab offers no native open; the comparison itself needs only the Host that recorded the turn.
 - **Comparison highlighting is hunk-local** — each rendered old and new hunk side is tokenized independently because omitted source lines are unavailable; unknown suffixes remain plain, and the tab draws at most 5,000 lines before saying so.
 - **Comparisons carry whole file text** — the comparison route serves a listed file's complete text wherever the Host recorded it, including ignored files and files outside the workspace root the Sidebar previews are confined to.
-- **Files outside the workspace open by absolute path only** — the recorded path is the Host path at recording time; a moved workspace or a different viewing Session cannot relocate it.
+- **Recovery requires recorded absolute directories** — links outside the workspace can resolve through loaded output history, but moving those outputs to an unrecorded directory requires a corrected link.
 
 <a id="dev-note"></a>
 ### Dev Note
