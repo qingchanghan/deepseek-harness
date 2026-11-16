@@ -35,7 +35,7 @@ kind: "package-reference"
 
 已发送的普通文件附件保留草稿中的[文件卡片圆角](../../../docs/ui-radius.zh.md#radius-scale)。
 
-`ChatView` 通过节点列表外围既有的 `MarkdownDelegateProvider` 提供文件及 HTTP(S) 导航，直接传入 `requestOpenFile`、`openExternalLink` 和 `fileImages`。文件打开动作保留 Chat 的失败反馈与重试处理。Assistant Markdown 文件链接在消息落定后可于右侧栏打开，包括未修改文件的引用。相对路径基于当前查看的 Session 工作区解析；绝对路径仍使用同一 Session 的文件系统访问。`#L24` 和 `#L24-L30` 定位到指定起始行，并复用现有文件标签。文件缺失时显示预览错误状态。右键点击文件链接或已解析的输出文件提及可选择「复制绝对路径」；键盘菜单键和 Shift+F10 打开同一菜单。复制时向所属 Host 解析相对路径，保留远程 Host 路径，并去除行号片段。工作区目标不存在时，复制和预览会检查[交付插件](../ui-deliverables/README.zh.md)从已加载输出记录提供的候选；目标有歧义或不可访问时显示提示，不猜测路径。绝对路径即使文件已删除仍可复制。应用级提示报告复制成功或失败，不会打开文件。
+`ChatView` 通过节点列表外围既有的 `MarkdownDelegateProvider` 提供文件及 HTTP(S) 导航，直接传入 `requestOpenFile`、`openExternalLink` 和 `fileImages`。文件打开动作保留 Chat 的失败反馈与重试处理。Assistant Markdown 文件链接在消息落定后可于右侧栏打开，包括未修改文件的引用。相对路径基于当前查看的 Session 工作区解析；绝对路径仍使用同一 Session 的文件系统访问。`#L24` 和 `#L24-L30` 定位到指定起始行，并复用现有文件标签。文件缺失时显示预览错误状态。右键点击文件链接或已解析的输出文件提及可选择「复制绝对路径」；键盘菜单键和 Shift+F10 打开同一菜单。复制时向所属 Host 解析相对路径，保留远程 Host 路径，并去除行号片段。工作区目标不存在时，文件操作会检查[交付插件](../ui-deliverables/README.zh.md)从已加载输出记录提供的候选；对于带目录前缀且不含 `..` 的链接，还会检查记录的 Session 工作区各级父目录下的候选。父目录在旧输出历史尚未加载时也可使用，单独文件名不采用此纠正方式。预览、复制和图片读取要求两类候选合计恰好一个目标存在；候选有歧义或不可访问时显示提示，不猜测路径。父目录检查到 Host 文件系统根目录为止，Windows UNC 路径则止于共享根目录，不遍历目录内容。绝对路径即使文件已删除仍可复制。应用级提示报告复制成功或失败，不会打开文件。
 
 原生消息图片使用独立的用户与输出位置。`conversation.chat.user.content` Factory 声明 `conversation.chat.user.images`，由 `UserContent` 渲染；Assistant 节点注册声明 `conversation.chat.message.images`，由 `AssistantMarkdown` 渲染。两者通过显式 props 接收图片来源、授权 `loadImage` 和布局参数。官方 `MessageImages` 条目调用共享的 root 作用域 `conversation.images.content` Factory。每个位置均可独立替换，无需复制画廊实现。
 

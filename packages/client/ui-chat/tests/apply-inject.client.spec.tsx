@@ -255,6 +255,32 @@ describe('Chat inject API', () => {
     }
   })
 
+  it('opens and copies cross-directory files with no output history loaded', async () => {
+    const b = await bench()
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    vi.stubGlobal('navigator', { clipboard: { writeText } })
+    try {
+      const id = 'cold-output-session' as SessionId
+      await b.runtime.sessions.add({ id, summary: { cwd: '/data/work/worktrees/task', host: { id: 'h20', name: 'H20' } } })
+      const reference = b.runtime.sessions.retain(id)
+      await reference.ready
+      const relative = 'dsa_agg_offload/mqa/flag/varlen.log'
+      const target = `/data/work/${relative}`
+      b.stat.mockImplementation(async (_id, path) => path === target
+        ? { ok: true, value: { absolutePath: target, version: 'v1' } }
+        : { ok: false, error: new RemoteError('workspace-file/not-found', 'missing', { path }) })
+      const { injected } = b.chatViewApi(reference)
+      await injected.openFile(relative)
+      expect(b.sidebarRight.openResource).toHaveBeenCalledExactlyOnceWith(`dsh-resource://file/session/${id}/${target}`)
+      await injected.copyFilePath(relative)
+      expect(writeText).toHaveBeenCalledExactlyOnceWith(target)
+      expect(b.stat.mock.calls.every(([scope]) => scope === id)).toBe(true)
+    } finally {
+      vi.unstubAllGlobals()
+      await b.runtime.dispose()
+    }
+  })
+
   it('uses the same verified remote target for copy and preview, and drops a lookup after reset', async () => {
     const b = await bench()
     const writeText = vi.fn().mockResolvedValue(undefined)

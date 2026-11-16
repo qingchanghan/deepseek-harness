@@ -1,7 +1,7 @@
 /** Cold-replayed Markdown references open Session files through the shipped Web composition. */
 import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { basename, join } from 'node:path'
+import { basename, isAbsolute, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { chromium, type Browser, type Page } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
@@ -19,7 +19,7 @@ const SNAPSHOT_DIR = fileURLToPath(new URL('../../../snapshots/web/markdown-file
 const MODE = webSnapshotMode()
 
 /** Seed read-card links or a successful output with explicit Markdown references. */
-function fileLinksFixture(path: string, writtenReply?: string): string {
+function fileLinksFixture(path: string, reply?: string, writeOutput = reply !== undefined): string {
   const session = Session.create(SessionId('parent-file-links-source'))
   session.append('turn/start', { turn: 1 })
   const user = session.append('user/message', createUserMessage({
@@ -28,8 +28,8 @@ function fileLinksFixture(path: string, writtenReply?: string): string {
   session.append('session/title', { title: 'Parent file links', messageSeqs: [user.seq], source: { kind: 'fallback' } })
   session.append('step/start', { turn: 1, step: 1 })
   const callId = ToolCallId('parent-file-read')
-  const name = writtenReply === undefined ? 'read' : 'write'
-  const args = JSON.stringify(writtenReply === undefined ? { file_path: path, offset: 24, limit: 7 } : { file_path: path, content: 'report\n' })
+  const name = writeOutput ? 'write' : 'read'
+  const args = JSON.stringify(writeOutput ? { file_path: path, content: 'report\n' } : { file_path: path, offset: 24, limit: 7 })
   session.append('assistant/message', {
     turn: 1, step: 1, stream: [],
     message: createAssistantMessage({
@@ -39,7 +39,7 @@ function fileLinksFixture(path: string, writtenReply?: string): string {
   }, { surfaceOp: 'append' })
   const call = session.append('tool/call', { turn: 1, step: 1, callId, name, arguments: args })
   session.append('tool/result', {
-    turn: 1, step: 1, meta: { path: writtenReply === undefined ? '{{cwd}}/parent.txt' : path },
+    turn: 1, step: 1, meta: { path: isAbsolute(path) ? path : '{{cwd}}/parent.txt' },
     message: createToolResultMessage({ callId, content: [{ type: 'text', text: 'parent line 24\n' }], isError: false }),
   }, { surfaceOp: 'append', sourceEventSeqs: [call.seq] })
   session.append('step/end', { turn: 1, step: 1 })
@@ -47,7 +47,7 @@ function fileLinksFixture(path: string, writtenReply?: string): string {
   session.append('assistant/message', {
     turn: 1, step: 2, stream: [],
     message: createAssistantMessage({
-      content: [{ type: 'text', text: writtenReply
+      content: [{ type: 'text', text: reply
         ?? `[Parent file:24–30](<${path}#L24-L30>) · [Parent file:30](<${path}#L30>)` }],
       source: { provider: 'deepseek-official', model: 'deepseek-v4-flash' },
     }),
@@ -243,7 +243,7 @@ describe('web e2e: Markdown file links', () => {
     }
   })
 
-  it('previews and copies an output in another directory under a recorded ancestor', async () => {
+  it.each(['recorded-output', 'workspace-parent'] as const)('previews and copies an output under a known ancestor (%s)', async (anchor) => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-cross-directory-file'))
     const outside = await realpath(await mkdtemp(join(tmpdir(), 'dsh-cross-directory-links-')))
     try {
@@ -254,7 +254,11 @@ describe('web e2e: Markdown file links', () => {
       await mkdir(join(outside, 'dsa_agg_offload/mqa_varlen_bench_20261116/flag'), { recursive: true })
       await writeFile(recorded, 'report\n')
       await writeFile(absolute, 'varlen benchmark completed\nlatency: 1.25 ms\n')
-      const id = await seedSession(scaffold, fileLinksFixture(recorded, `[varlen.log](<${relative}>)`), 'cross-directory-file-links')
+      const cwd = anchor === 'workspace-parent' ? join(outside, 'worktrees/task') : scaffold.workspaceCwd
+      await mkdir(cwd, { recursive: true })
+      const fixture = fileLinksFixture(anchor === 'workspace-parent' ? absolute : recorded,
+        `[varlen.log](<${relative}>)`, anchor === 'recorded-output')
+      const id = await seedSession({ ...scaffold, workspaceCwd: cwd }, fixture, `cross-directory-file-links-${anchor}`)
       await page.reload({ waitUntil: 'load' })
       const workspace = page.getByRole('treeitem').first()
       await workspace.waitFor()

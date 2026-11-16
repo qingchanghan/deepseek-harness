@@ -122,7 +122,7 @@ These limits define the current deliverables vocabulary. They are current packag
 - **Native opening needs a Host desktop** — without one the review tab offers no native open; the comparison itself needs only the Host that recorded the turn.
 - **Comparison highlighting is hunk-local** — each rendered old and new hunk side is tokenized independently because omitted source lines are unavailable; unknown suffixes remain plain, and the tab draws at most 5,000 lines before saying so.
 - **Comparisons carry whole file text** — the comparison route serves a listed file's complete text wherever the Host recorded it, including ignored files and files outside the workspace root the Sidebar previews are confined to.
-- **Recovery requires recorded absolute directories** — links outside the workspace can resolve through loaded output history, but moving those outputs to an unrecorded directory requires a corrected link.
+- **Unknown roots are not discovered** — recovery uses recorded outputs and the viewed workspace’s ancestors; moving files outside those directories requires a corrected link.
 
 <a id="dev-note"></a>
 ### Dev Note

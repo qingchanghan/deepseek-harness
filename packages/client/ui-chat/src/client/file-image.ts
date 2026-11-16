@@ -8,7 +8,7 @@ import { resolveChatFilePath } from './file-path.ts'
  * @param files - Session-routed workspace file methods.
  * @param sessionId - Session owning the authored image.
  * @param path - decoded absolute or relative image destination.
- * @param candidates - recorded absolute targets for missing workspace-relative paths.
+ * @param candidates - absolute targets inferred from recorded outputs and workspace ancestors.
  * @param signal - caller and connection lifetime cancellation.
  * @returns complete image bytes, or absence on missing, ambiguous, inaccessible, or cancelled reads.
  */

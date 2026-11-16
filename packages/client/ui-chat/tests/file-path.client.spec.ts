@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { ClientRemote } from '@deepseek-ai/dsh-api-remotes/client'
 import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
 import { SessionId } from '@deepseek-ai/dsh-session/types'
-import { resolveChatFilePath } from '../src/client/file-path.ts'
+import { parentFileCandidates, resolveChatFilePath } from '../src/client/file-path.ts'
 
 const sessionId = SessionId('remote-session')
 const signal = () => new AbortController().signal
@@ -13,6 +13,33 @@ const statFor = (paths: Readonly<Record<string, string>>) => vi.fn<ClientRemote[
     : { ok: true, value: { absolutePath: paths[path], version: '1' } })
 
 describe('conversation file path resolution', () => {
+  it('derives parent candidates without leaving POSIX, drive, or UNC roots', () => {
+    expect(parentFileCandidates('./out/logs/file.log', '/data/work/trees/task/')).toEqual([
+      '/data/work/trees/out/logs/file.log', '/data/work/out/logs/file.log', '/data/out/logs/file.log', '/out/logs/file.log',
+    ])
+    expect(parentFileCandidates('out\\logs\\file.log', 'C:\\work\\trees\\task')).toEqual([
+      'C:\\work\\trees\\out\\logs\\file.log', 'C:\\work\\out\\logs\\file.log', 'C:\\out\\logs\\file.log',
+    ])
+    expect(parentFileCandidates('out/file.log', '\\\\server\\share\\trees\\task')).toEqual([
+      '\\\\server\\share\\trees\\out\\file.log', '\\\\server\\share\\out\\file.log',
+    ])
+    for (const cwd of ['/', 'C:\\', '\\\\server\\share', 'relative', undefined]) {
+      expect(parentFileCandidates('out/file.log', cwd)).toEqual([])
+    }
+    for (const path of ['file.log', '../out/file.log', 'out/../file.log', '/out/file.log', 'out//file.log', 'out/']) {
+      expect(parentFileCandidates(path, '/workspace/task')).toEqual([])
+    }
+  })
+
+  it('uses workspace ancestors only after a miss and rejects multiple existing matches', async () => {
+    const path = 'out/varlen.log'
+    const candidates = parentFileCandidates(path, '/work/trees/task')
+    const stat = statFor({ '/work/out/varlen.log': '/work/out/varlen.log' })
+    expect(await resolveChatFilePath(stat, sessionId, path, candidates, signal())).toBe('/work/out/varlen.log')
+    const ambiguous = statFor({ '/work/out/varlen.log': '/work/out/varlen.log', '/out/varlen.log': '/out/varlen.log' })
+    expect(await resolveChatFilePath(ambiguous, sessionId, path, candidates, signal())).toBeUndefined()
+  })
+
   it('prefers an existing workspace file over similarly named output files', async () => {
     const stat = statFor({ 'out/a.txt': '/workspace/out/a.txt', '/else/out/a.txt': '/else/out/a.txt' })
     expect(await resolveChatFilePath(stat, sessionId, 'out/a.txt', ['/else/out/a.txt'], signal())).toBe('/workspace/out/a.txt')

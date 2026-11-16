@@ -31,7 +31,7 @@ import { EMPTY_CHAT_SNAPSHOT } from './contract/snapshot.ts'
 import { ApprovalCommand } from './chat/ApprovalCommand.tsx'
 import { ChatView } from './chat/ChatView.tsx'
 import { FileCopyToast, type FileCopyNotice, type FileCopyToastInjected } from './chat/FileCopyToast.tsx'
-import { resolveChatFilePath } from './file-path.ts'
+import { parentFileCandidates, resolveChatFilePath } from './file-path.ts'
 import { readChatFileImage } from './file-image.ts'
 import { ChatFlow } from './chat/ChatFlow.tsx'
 import { registerChatNodeRenderers } from './chat/register-node-renderers.ts'
@@ -253,6 +253,10 @@ export function apply(ctx: Context): void {
         if (binding === undefined) throw new Error(`ui-chat: unknown session "${sessionId}"`)
         const session = binding.session
         const chat = chatSource(binding)
+        const fileCandidates = (path: string) => [
+          ...ctx.get('chatFileMentions')?.candidates(path, chat.getSnapshot().timeline) ?? [],
+          ...parentFileCandidates(path, ctx.sessions.list.getSnapshot().byId[sessionId]?.cwd),
+        ]
         return {
           ...nodeSources(binding),
           fileMentions: (owner: TurnTailOwnerProps) => ctx.get('chatFileMentions')?.forClosing(owner, sessionId),
@@ -269,7 +273,7 @@ export function apply(ctx: Context): void {
           // its top or at line 400, so the same tab is revealed and told where
           // to land.
           openFile: async (path, options) => {
-            const candidates = ctx.get('chatFileMentions')?.candidates(path, chat.getSnapshot().timeline) ?? []
+            const candidates = fileCandidates(path)
             const signal = fileLifetime.signal
             const resolved = candidates.length === 0 ? path : await resolveChatFilePath(
               (...args) => ctx.remote.workspaceFiles.stat(...args), sessionId, path, candidates, signal,
@@ -289,7 +293,7 @@ export function apply(ctx: Context): void {
             const seq = ++fileCopySeq
             const signal = fileLifetime.signal
             const current = () => !signal.aborted && seq === fileCopySeq
-            const candidates = ctx.get('chatFileMentions')?.candidates(path, chat.getSnapshot().timeline) ?? []
+            const candidates = fileCandidates(path)
             const absolutePath = await resolveChatFilePath(
               (...args) => ctx.remote.workspaceFiles.stat(...args), sessionId, path, candidates, signal,
             )
@@ -303,7 +307,7 @@ export function apply(ctx: Context): void {
           },
           loadFileImage: (path, signal) => readChatFileImage(
             ctx.remote.workspaceFiles, sessionId, path,
-            ctx.get('chatFileMentions')?.candidates(path, chat.getSnapshot().timeline) ?? [],
+            fileCandidates(path),
             AbortSignal.any([signal, fileLifetime.signal]),
           ),
           openExternalLink: (url) => {
