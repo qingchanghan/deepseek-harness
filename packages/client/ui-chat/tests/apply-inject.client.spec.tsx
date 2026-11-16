@@ -88,7 +88,10 @@ async function bench(initialSettings?: ChatSettings, withBrowserRegistry = true,
       ? { ok: false, error: new RemoteError('workspace-file/not-found', 'missing', { path }) }
       : { ok: true, value: { absolutePath: resolveWorkspacePath(cwd, path), version: 'v1' } }
   })
-  runtime.remote.provideNamespaces({ workspaceFiles: { stat } })
+  const readBytes = vi.fn<ClientRemote['workspaceFiles']['readBytes']>(async (_sessionId, path) => ({
+    ok: true, value: { absolutePath: path, version: '1', data: new Uint8Array([1]), offset: 0, eof: true },
+  }))
+  runtime.remote.provideNamespaces({ workspaceFiles: { stat, readBytes } })
   const openSession = vi.fn<(id: SessionId) => void>()
   runtime.ctx.provide('uiWorkspace', {
     openWorkspace: vi.fn(async (_workspaceId: WorkspaceId, beforeOpen: (id: SessionId) => void) => {
@@ -142,12 +145,32 @@ async function bench(initialSettings?: ChatSettings, withBrowserRegistry = true,
       const preference: object = row.inject!()
       return preference as LinkOpeningRowInjected
     },
-    runtime, chat, chatSettings, browserAvailable, stat,
+    runtime, chat, chatSettings, browserAvailable, stat, readBytes,
     layout, openWorkspacePath, sidebarRight, sidebarRightTabs, session, chatViewApi, chatFlowApi, rootReference, openSession,
   }
 }
 
 describe('Chat inject API', () => {
+  it('routes Markdown image reads by Session and cancels them on a connection reset', async () => {
+    const b = await bench()
+    try {
+      const { injected } = b.chatViewApi(b.rootReference)
+      const loaded = await injected.loadFileImage('/remote/plot.png', new AbortController().signal)
+      expect(loaded?.size).toBe(1)
+      expect(b.readBytes).toHaveBeenCalledWith(ROOT, '/remote/plot.png', {}, expect.any(AbortSignal))
+      const pending = Promise.withResolvers<Awaited<ReturnType<ClientRemote['workspaceFiles']['readBytes']>>>()
+      b.readBytes.mockReturnValueOnce(pending.promise)
+      const image = injected.loadFileImage('/remote/next.png', new AbortController().signal)
+      await vi.waitFor(() => { expect(b.readBytes).toHaveBeenCalledTimes(2) })
+      b.runtime.ctx.emit('connection/reset')
+      expect(b.readBytes.mock.calls[1]![3]?.aborted).toBe(true)
+      pending.resolve({ ok: true, value: { absolutePath: '/remote/next.png', version: '1', data: new Uint8Array([1]), offset: 0, eof: true } })
+      expect(await image).toBeUndefined()
+    } finally {
+      await b.runtime.dispose()
+    }
+  })
+
   it('reports an unresolved relative path without copying it', async () => {
     const b = await bench()
     const writeText = vi.fn().mockResolvedValue(undefined)
@@ -183,7 +206,7 @@ describe('Chat inject API', () => {
       const injectedToast: object = toast.inject!()
       const feedback = injectedToast as FileCopyToastInjected
       const earlier = injected.copyFilePath('earlier.md')
-      await vi.waitFor(() => expect(writeText).toHaveBeenCalledTimes(1))
+      await vi.waitFor(() => { expect(writeText).toHaveBeenCalledTimes(1) })
       await injected.copyFilePath('latest.md')
       const latest = feedback.hooks.notice.getSnapshot()
       first.reject(new Error('clipboard denied'))

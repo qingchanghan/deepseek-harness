@@ -322,6 +322,8 @@ export interface ChatViewInjected {
   openFile: (path: string, options?: OpenFileOptions) => Promise<void>
   /** Copy the Session's absolute file path and report its outcome in the app overlay. */
   copyFilePath: (path: string) => Promise<void>
+  /** Read a file image on the Session's Host; absence renders the localized preview failure. */
+  loadFileImage: (path: string, signal: AbortSignal) => Promise<Blob | undefined>
   loadOlder: () => void
   /** Jump loader: page history back through seq; resolves when the window covers it. */
   loadThrough: (seq: SessionSeq) => Promise<void>

@@ -32,6 +32,7 @@ import { ApprovalCommand } from './chat/ApprovalCommand.tsx'
 import { ChatView } from './chat/ChatView.tsx'
 import { FileCopyToast, type FileCopyNotice, type FileCopyToastInjected } from './chat/FileCopyToast.tsx'
 import { resolveChatFilePath } from './file-path.ts'
+import { readChatFileImage } from './file-image.ts'
 import { ChatFlow } from './chat/ChatFlow.tsx'
 import { registerChatNodeRenderers } from './chat/register-node-renderers.ts'
 import { UserContent } from './chat/UserContent.tsx'
@@ -300,6 +301,11 @@ export function apply(ctx: Context): void {
             const copied = await writeClipboard(absolutePath)
             if (current()) fileCopyNotice.set({ seq, outcome: copied ? 'copied' : 'failed' })
           },
+          loadFileImage: (path, signal) => readChatFileImage(
+            ctx.remote.workspaceFiles, sessionId, path,
+            ctx.get('chatFileMentions')?.candidates(path, chat.getSnapshot().timeline) ?? [],
+            AbortSignal.any([signal, fileLifetime.signal]),
+          ),
           openExternalLink: (url) => {
             if (linkOpening.getSnapshot() === 'sidebar' && ctx.get('sidebarRightTabs')?.get('browser') !== undefined) {
               ctx.sidebarRight.openTab('browser', { params: { url } })

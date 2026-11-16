@@ -49,7 +49,7 @@ function fileLinksFixture(path: string, writtenLink?: string): string {
     message: createAssistantMessage({
       content: [{ type: 'text', text: writtenLink === undefined
         ? `[Parent file:24–30](<${path}#L24-L30>) · [Parent file:30](<${path}#L30>)`
-        : `[metric.py](<${writtenLink}>)` }],
+        : `[metric.py](<${writtenLink}>)\n\n![Output graph](run/plot.png)` }],
       source: { provider: 'deepseek-official', model: 'deepseek-v4-flash' },
     }),
   }, { surfaceOp: 'append' })
@@ -212,6 +212,9 @@ describe('web e2e: Markdown file links', () => {
       await mkdir(join(outside, 'run'))
       await writeFile(join(outside, 'run/RESULTS.md'), 'report\n')
       await writeFile(join(outside, 'run/metric.py'), 'print("metric")\n')
+      await writeFile(join(outside, 'run/plot.png'), Buffer.from(
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64',
+      ))
       const id = await seedSession(scaffold, fileLinksFixture(join(outside, 'run/RESULTS.md'), 'run/metric.py'), 'output-file-links')
       await page.reload({ waitUntil: 'load' })
       const workspace = page.getByRole('treeitem').first()
@@ -225,6 +228,13 @@ describe('web e2e: Markdown file links', () => {
       await source.click()
       await expect.poll(() => page.locator('[data-textpreview-path]').textContent()).toBe(join(outside, 'run/metric.py'))
       await expect.poll(() => page.locator('[data-code-preview]').textContent()).toContain('print("metric")')
+      const image = page.getByRole('img', { name: 'Output graph', exact: true })
+      await expect.poll(() => image.evaluate(element => (element as HTMLImageElement).naturalWidth)).toBe(1)
+      expect(await image.getAttribute('src')).toMatch(/^blob:/)
+      await page.getByRole('button', { name: 'View full image: Output graph', exact: true }).click()
+      const dialog = page.getByRole('dialog', { name: 'Image preview', exact: true })
+      await expect.poll(() => dialog.getByRole('img').evaluate(element => (element as HTMLImageElement).naturalWidth)).toBe(1)
+      await page.keyboard.press('Escape')
       expect(tripwire.pageErrors).toEqual([])
     } finally {
       await rm(outside, { recursive: true, force: true })

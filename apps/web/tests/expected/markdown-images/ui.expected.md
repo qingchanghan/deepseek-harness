@@ -22,6 +22,9 @@
 - paragraph:
   - button "View comparison"
 - paragraph:
+  - 'button "View full image: Vector plot"':
+    - img "Vector plot"
+- paragraph:
   - 'button "View full image: Space path"':
     - img "Space path"
 - paragraph:
@@ -30,11 +33,13 @@
 - paragraph:
   - 'button "View full image: Encoded filename"':
     - img "Encoded filename"
-- paragraph: Image preview unavailable · Oversized image
+- paragraph:
+  - status: Image preview unavailable · Oversized image
 - paragraph:
   - 'button "View full image: Outside workspace image"':
     - img "Outside workspace image"
-- paragraph: Image preview unavailable · Missing image
+- paragraph:
+  - status: Image preview unavailable · Missing image
 - paragraph: Image preview unavailable · {{cwd}}/corrupt.png
 - paragraph: REMOTE_IMAGE_DONE
 - button "Copy"

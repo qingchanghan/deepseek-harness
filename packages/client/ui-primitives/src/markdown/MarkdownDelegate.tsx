@@ -13,9 +13,15 @@ export type MarkdownExternalLinkHandler = (href: string) => void
 export interface MarkdownDelegate {
   /** Image previews for decoded local paths in this owner's workspace. */
   readonly fileImages?: {
-    resolve: (path: string) => string | undefined
     labels: ImageLightboxLabels & { open: string; loading: string; failed: string }
-  } | undefined
+  } & (
+    | { resolve: (path: string) => string | undefined; load?: never }
+    | {
+      resolve?: never
+      /** Read owner-authorized bytes; the renderer owns and releases the resulting Blob URL. */
+      load: (path: string, signal: AbortSignal) => Promise<Blob | undefined>
+    }
+  ) | undefined
   /** Ordinary HTTP(S) activation; absent handlers retain native anchor behavior. */
   readonly openExternalLink?: MarkdownExternalLinkHandler | undefined
   /**

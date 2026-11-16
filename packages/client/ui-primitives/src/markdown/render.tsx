@@ -27,7 +27,8 @@ import { CodeBlock } from './CodeBlock.tsx'
 import { parseFileLink } from './file-link.ts'
 import { renderTexToReact } from './katex.tsx'
 import { LinkIconMedium, classifyLinkPath } from '../LinkIcon.tsx'
-import { useMarkdownDelegate } from './MarkdownDelegate.tsx'
+import { useMarkdownDelegate, type MarkdownDelegate } from './MarkdownDelegate.tsx'
+import { useFileImage } from './use-file-image.ts'
 import { HoverCard } from '../HoverCard.tsx'
 import { ImageLightbox } from '../ImageLightbox.tsx'
 import { ImagePreview } from '../ImagePreview.tsx'
@@ -613,22 +614,27 @@ function MarkdownFileLink({ file, glyph, children }: {
   if (openFile === undefined) return <>{children}</>
   // Pure-image anchors already contain their preview and keep one navigation target.
   const preview = glyph && classifyLinkPath(file.path) === 'image' ? fileImages : undefined
-  const src = preview?.resolve(file.path)
+  const src = preview?.resolve?.(file.path)
   const anchor = (
     <MarkdownFileButton
       path={file.path}
       className={clsx(css.fileMention, css.fileLink)}
-      title={src === undefined ? file.path : undefined}
+      title={src === undefined && preview?.load === undefined ? file.path : undefined}
       onClick={() => { openFile(file.path, file.line === undefined ? undefined : { line: file.line }) }}
     >
       {glyph && <LinkIconMedium kind={classifyLinkPath(file.path)} className={css.linkIcon} />}
       {children}
     </MarkdownFileButton>
   )
-  if (src === undefined || preview === undefined) return anchor
+  let image: ReactNode
+  if (preview?.load !== undefined) {
+    image = <AsyncFileImage path={file.path} alt={file.path} destination={file.path} images={preview} hover />
+  } else if (preview !== undefined && src !== undefined) {
+    image = <ImagePreview src={src} alt={file.path} loadingLabel={preview.labels.loading} failedLabel={preview.labels.failed} />
+  } else return anchor
   return <HoverCard inline anchor={anchor}
     content={<>
-      <ImagePreview src={src} alt={file.path} loadingLabel={preview.labels.loading} failedLabel={preview.labels.failed} />
+      {image}
       <span className={css.previewName}>{file.path.split(/[\\/]/u).pop()}</span>
     </>} />
 }
@@ -662,9 +668,29 @@ function MarkdownImage({ destination, alt, pathImages, streaming, inLink }: {
 }): ReactNode {
   const { fileImages } = useMarkdownDelegate()
   const file = streaming ? undefined : parseFileLink(destination)
-  const src = (file === undefined ? undefined : fileImages?.resolve(file.path)) ?? imageSource(destination, pathImages)
+  if (file !== undefined && fileImages?.load !== undefined) {
+    return <AsyncFileImage path={file.path} alt={alt} destination={destination} images={fileImages} inLink={inLink} />
+  }
+  const src = (file === undefined ? undefined : fileImages?.resolve?.(file.path)) ?? imageSource(destination, pathImages)
   if (src === undefined) return <span className={css.imageAlt}>{alt}</span>
   return <LoadedMarkdownImage key={src} src={src} alt={alt} destination={destination} preview={inLink ? undefined : fileImages} />
+}
+
+function AsyncFileImage({ path, alt, destination, images, hover = false, inLink = false }: {
+  path: string
+  alt: string
+  destination: string
+  images: Extract<NonNullable<MarkdownDelegate['fileImages']>, { resolve?: never }>
+  hover?: boolean
+  inLink?: boolean
+}): ReactNode {
+  const source = useFileImage(path, images.load)
+  if (source.kind !== 'ready') {
+    return <span className={css.imageAlt} role="status">{source.kind === 'loading'
+      ? images.labels.loading : `${images.labels.failed} · ${alt || destination}`}</span>
+  }
+  if (hover) return <ImagePreview src={source.src} alt={alt} loadingLabel={images.labels.loading} failedLabel={images.labels.failed} />
+  return <LoadedMarkdownImage key={source.src} src={source.src} alt={alt} destination={destination} preview={inLink ? undefined : images} />
 }
 
 function LoadedMarkdownImage({ src, alt, destination, preview }: {

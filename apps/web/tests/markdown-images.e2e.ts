@@ -114,6 +114,8 @@ function markdownImageFixture(remoteUrl: string, outsidePath: string): string {
           '',
           '[View comparison](./valid.png)',
           '',
+          '![Vector plot](./vector.svg)',
+          '',
           '![Space path]({{cwd}}/test workspace/测试图.png)',
           '',
           '![Encoded path]({{cwd}}/test%20workspace/测试图.png)',
@@ -173,13 +175,14 @@ describe('web e2e: Markdown image rendering', () => {
     scaffold = await launchWebScaffold({})
     await writeFile(join(scaffold.workspaceCwd, 'valid.png'), PNG)
     await writeFile(join(scaffold.workspaceCwd, 'local-image.png'), PNG)
+    await writeFile(join(scaffold.workspaceCwd, 'vector.svg'), '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="10"><rect width="20" height="10" fill="red"/></svg>')
     await mkdir(join(scaffold.workspaceCwd, 'test workspace'))
     await writeFile(join(scaffold.workspaceCwd, 'test workspace/测试图.png'), PNG)
     await writeFile(join(scaffold.workspaceCwd, 'test workspace/测试#100%.png'), PNG)
     await writeFile(join(scaffold.workspaceCwd, 'corrupt.png'), 'invalid image')
     const oversized = await open(join(scaffold.workspaceCwd, 'oversized.png'), 'w')
     try {
-      await oversized.truncate(20 * 1024 * 1024 + 1)
+      await oversized.truncate(32 * 1024 * 1024 + 1)
     } finally {
       await oversized.close()
     }
@@ -260,8 +263,8 @@ describe('web e2e: Markdown image rendering', () => {
     }
     expect(imageOrigin.requests).toEqual([{ path: '/image.png', referer: undefined }])
 
+    await expect.poll(() => page.getByRole('img', { name: 'Vector plot', exact: true }).evaluate(element => (element as HTMLImageElement).naturalWidth)).toBe(20)
     const workspaceImage = page.getByRole('img', { name: WORKSPACE_ALT })
-    await expect.poll(() => mediaResponses.get(join(scaffold.workspaceCwd, 'valid.png'))).toBe(200)
     await expect.poll(() => workspaceImage.evaluate(element => (element as HTMLImageElement).naturalWidth, undefined, {
       timeout: 1_000,
     }))
@@ -273,16 +276,8 @@ describe('web e2e: Markdown image rendering', () => {
       expect(await page.getByRole('img', { name: alt }).count()).toBe(0)
     }
     await page.getByText(`Image preview unavailable · ${join(scaffold.workspaceCwd, 'corrupt.png')}`, { exact: true }).waitFor()
-    expect(mediaResponses).toEqual(new Map([
-      [join(scaffold.workspaceCwd, 'valid.png'), 200],
-      [`${scaffold.workspaceCwd}/./local-image.png`, 200],
-      [join(scaffold.workspaceCwd, 'test workspace/测试图.png'), 200],
-      [join(scaffold.workspaceCwd, 'test workspace/测试#100%.png'), 200],
-      [join(scaffold.workspaceCwd, 'oversized.png'), 413],
-      [join(scaffold.persistenceRoot, 'outside.png'), 200],
-      [join(scaffold.workspaceCwd, 'missing.png'), 404],
-      [join(scaffold.workspaceCwd, 'corrupt.png'), 200],
-    ]))
+    // Session file images must never fall back to the browser Host's local file route.
+    expect(mediaResponses.size).toBe(0)
 
     await page.getByRole('button', { name: `View full image: ${WORKSPACE_ALT}`, exact: true }).click()
     const lightbox = page.getByRole('dialog', { name: 'Image preview', exact: true })

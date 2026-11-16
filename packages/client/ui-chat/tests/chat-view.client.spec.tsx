@@ -508,6 +508,7 @@ function makeHarness(
     completeViewRequest: () => {},
     openFile,
     copyFilePath,
+    loadFileImage: vi.fn(async () => new Blob([new Uint8Array([1])])),
     openExternalLink: vi.fn(),
     loadOlder,
     loadThrough,
@@ -670,6 +671,19 @@ function formatRunDuration(ms: number, t: Parameters<typeof durationParts>[1]): 
 }
 
 describe('Chat node rendering', () => {
+  it('loads decoded Markdown image paths through the injected Session reader', async () => {
+    const h = makeHarness({
+      nodes: [user(1, 'image'), assistant(2, '![plot](<run/图%20表.png>)', 1)],
+      turnEnds: new Map([[1, 2]]),
+    })
+    const create = vi.fn(() => 'blob:session-plot')
+    vi.stubGlobal('URL', Object.assign(class extends URL {}, { createObjectURL: create, revokeObjectURL: vi.fn() }))
+    const load = vi.fn(async () => new Blob(['png']))
+    render(<h.ChatView {...h.props} loadFileImage={load} />)
+    expect((await screen.findByRole('img', { name: 'plot' })).getAttribute('src')).toBe('blob:session-plot')
+    expect(load).toHaveBeenCalledWith('run/图 表.png', expect.any(AbortSignal))
+  })
+
   it('copies a Markdown file path from its context menu and dismisses with Escape or an outside click', () => {
     const h = makeHarness({
       nodes: [user(1, 'files'), assistant(2, '[metric_hit_rate.py](out/metric_hit_rate.py#L12)', 1)],

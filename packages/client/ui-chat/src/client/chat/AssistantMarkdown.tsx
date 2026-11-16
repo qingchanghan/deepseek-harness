@@ -12,7 +12,7 @@ import css from './AssistantMarkdown.module.css'
 
 /**
  * Standalone fallback for image destinations (query/fragment suffixes are ignored).
- * Chat fileImages resolves decoded file references against cwd; pathImages also
+ * Chat fileImages reads decoded file references through the Session Host; pathImages
  * serves this component outside that provider and accepts legacy image URL suffixes.
  * Resolve an authored absolute image path against the document's file API.
  * @param base - canonical `document.baseURI` at render time.
