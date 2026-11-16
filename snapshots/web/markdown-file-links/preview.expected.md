@@ -1,4 +1,5 @@
 - text: {{cwd}}/other/example.txt
+- button "Copy file path"
 - button "Line wrap" [pressed]
 - button "Read the file again"
 - text: other file

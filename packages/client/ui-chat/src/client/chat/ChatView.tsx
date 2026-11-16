@@ -8,7 +8,7 @@ import type {
 import type { InboxState } from '@deepseek-ai/dsh-agent/types'
 import type { PendingSubmission } from '@deepseek-ai/dsh-api-session-controller/client'
 import {
-  Button, IconChevronDownOutlineRegular, MarkdownDelegateProvider, Modal,
+  Button, IconChevronDownOutlineRegular, IconCopyOutlineRegular, MarkdownDelegateProvider, Menu, Modal,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import { isAtOrOutside } from '../contract/group-tree.ts'
 import type { ChatFlowHookContext, ChatViewSlotProps, OpenFileOptions } from '../contract/slots.ts'
@@ -59,7 +59,7 @@ const MOTION_TAIL_MS = 800
  */
 export function ChatView({
   useSession, useChat, useConversation, useSessions, renderSlot,
-  sessionId, openFile, openExternalLink, loadOlder, loadThrough, loadImage, inspectCall, chatScroll, forkAt, fileMentions,
+  sessionId, openFile, copyFilePath, openExternalLink, loadOlder, loadThrough, loadImage, inspectCall, chatScroll, forkAt, fileMentions,
   usePresentation, useProjection, t,
 }: ChatViewSlotProps) {
   const order = useChat(s => s.order)
@@ -111,6 +111,17 @@ export function ChatView({
   const loadingOlder = useSession(s => s.loadingOlder)
   const [fileOpenError, setFileOpenError] = useState<{ path: string; message: string } | null>(null)
   const [fileOpenBusy, setFileOpenBusy] = useState(false)
+  const [fileMenu, setFileMenu] = useState<{ path: string; x: number; y: number; trigger: HTMLElement | null } | null>(null)
+  const fileContextMenu = useCallback((path: string, position: { x: number; y: number }) => {
+    const trigger = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    setFileMenu({ path, ...position, trigger })
+  }, [])
+  const closeFileMenu = () => {
+    if (document.activeElement?.closest('[role="menu"]') !== null && fileMenu?.trigger?.isConnected) {
+      fileMenu.trigger.focus({ preventScroll: true })
+    }
+    setFileMenu(null)
+  }
   // Close/retry must ignore a settlement that started before the latest
   // gesture; otherwise a cancelled in-flight refusal reopens the dialog.
   const fileOpenRequest = useRef(0)
@@ -223,7 +234,8 @@ export function ChatView({
                 </button>
               </div>
             )}
-            <MarkdownDelegateProvider openFile={requestOpenFile} openExternalLink={openExternalLink} fileImages={fileImages}>
+            <MarkdownDelegateProvider openFile={requestOpenFile} openExternalLink={openExternalLink}
+              fileImages={fileImages} fileContextMenu={fileContextMenu}>
               {renderSlot('conversation.chat.flow', {
                 entries, pendingInputs, lastInputTurn, deferCollapse,
                 cwd, openFile: requestOpenFile, inspectCall, forkAt, loadImage, fileMentions,
@@ -258,6 +270,14 @@ export function ChatView({
           t={t}
         />
       )}
+      {fileMenu !== null && <Menu open portal autoFocus anchor={null}
+        getAnchorRect={() => new DOMRect(fileMenu.x, fileMenu.y, 0, 0)}
+        items={[{ id: 'copy-path', label: t('fileCopy.absolutePath'), icon: <IconCopyOutlineRegular /> }]}
+        onClose={closeFileMenu}
+        onSelect={() => {
+          closeFileMenu()
+          void copyFilePath(fileMenu.path)
+        }} />}
     </div>
   )
 }

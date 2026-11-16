@@ -24,6 +24,12 @@ export interface MarkdownDelegate {
    * @param options - First line to reveal when the destination specifies a line or range.
    */
   readonly openFile?: ((path: string, options?: { line?: number }) => void) | undefined
+  /**
+   * Open the owner's actions for a decoded file destination, excluding its line fragment.
+   * @param path - Absolute or workspace-relative file path.
+   * @param position - Viewport coordinates for the requested context menu.
+   */
+  readonly fileContextMenu?: ((path: string, position: { x: number; y: number }) => void) | undefined
 }
 
 const MarkdownDelegateContext = createContext<MarkdownDelegate>({})
@@ -44,8 +50,10 @@ export function MarkdownDelegateProvider({
   openExternalLink,
   openFile,
   fileImages,
+  fileContextMenu,
 }: MarkdownDelegateProviderProps): ReactNode {
-  const delegate = useMemo(() => ({ openExternalLink, openFile, fileImages }), [openExternalLink, openFile, fileImages])
+  const delegate = useMemo(() => ({ openExternalLink, openFile, fileImages, fileContextMenu }),
+    [openExternalLink, openFile, fileImages, fileContextMenu])
   return (
     <MarkdownDelegateContext.Provider value={delegate}>
       {children}

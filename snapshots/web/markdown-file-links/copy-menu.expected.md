@@ -1,0 +1,2 @@
+- menu:
+  - menuitem "Copy absolute path"

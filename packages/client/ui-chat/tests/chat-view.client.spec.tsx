@@ -399,6 +399,7 @@ function makeHarness(
     key => grouped?.groupSource(key as GroupKey) ?? absentGroup,
   )
   const openFile = vi.fn<(path: string) => Promise<void>>().mockResolvedValue(undefined)
+  const copyFilePath = vi.fn<(path: string) => Promise<void>>().mockResolvedValue(undefined)
   const openUserFile = vi.fn<(path: string) => void>()
   const renderUserContent = createUserContentFixture({ openFile: openUserFile })
   const loadOlder = vi.fn()
@@ -506,6 +507,7 @@ function makeHarness(
     openView,
     completeViewRequest: () => {},
     openFile,
+    copyFilePath,
     openExternalLink: vi.fn(),
     loadOlder,
     loadThrough,
@@ -668,6 +670,27 @@ function formatRunDuration(ms: number, t: Parameters<typeof durationParts>[1]): 
 }
 
 describe('Chat node rendering', () => {
+  it('copies a Markdown file path from its context menu and dismisses with Escape or an outside click', () => {
+    const h = makeHarness({
+      nodes: [user(1, 'files'), assistant(2, '[metric_hit_rate.py](out/metric_hit_rate.py#L12)', 1)],
+      turnEnds: new Map([[1, 2]]),
+    })
+    const view = render(<h.ChatView {...h.props} />)
+    const link = view.getByRole('button', { name: 'metric_hit_rate.py' })
+    fireEvent.contextMenu(link, { clientX: 100, clientY: 120 })
+    fireEvent.click(view.getByRole('menuitem', { name: '复制绝对路径' }))
+    expect(h.props.copyFilePath).toHaveBeenCalledWith('out/metric_hit_rate.py')
+    expect(h.openFile).not.toHaveBeenCalled()
+    expect(view.queryByRole('menu')).toBeNull()
+    expect(document.activeElement).toBe(link)
+    fireEvent.contextMenu(link)
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(view.queryByRole('menu')).toBeNull()
+    expect(document.activeElement).toBe(link)
+    fireEvent.contextMenu(link)
+    fireEvent.pointerDown(document.body)
+    expect(view.queryByRole('menu')).toBeNull()
+  })
 
   it('opens Markdown references to unmodified files with line navigation', () => {
     const h = makeHarness({

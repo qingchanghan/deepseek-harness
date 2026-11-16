@@ -315,16 +315,16 @@ function renderNode(node: Md.RootContent, key: Key, context: MarkdownRenderConte
       if (mention !== undefined) {
         return (
           <code key={key}>
-            <button
-              type="button"
+            <MarkdownFileButton
+              path={mention.title}
               className={css.fileMention}
               title={mention.title}
-              aria-label={mention.label}
+              label={mention.label}
               onClick={mention.open}
             >
               <LinkIconMedium kind={classifyLinkPath(value)} className={css.linkIcon} />
               {value}
-            </button>
+            </MarkdownFileButton>
           </code>
         )
       }
@@ -578,6 +578,32 @@ function renderAnchor(url: string, children: ReactNode[], key: Key, glyph = true
   return renderSafeLink(normalizeUri(url), children, key, glyph)
 }
 
+function MarkdownFileButton({ path, title, label, className, onClick, children }: {
+  path: string
+  title: string | undefined
+  label?: string
+  className: string | undefined
+  onClick: () => void
+  children: ReactNode
+}): ReactNode {
+  const { fileContextMenu } = useMarkdownDelegate()
+  return <button type="button" className={className} title={title} aria-label={label} onClick={onClick}
+    onContextMenu={fileContextMenu === undefined ? undefined : (event) => {
+      event.preventDefault()
+      event.stopPropagation()
+      event.currentTarget.focus({ preventScroll: true })
+      fileContextMenu(path, { x: event.clientX, y: event.clientY })
+    }}
+    onKeyDown={fileContextMenu === undefined ? undefined : (event) => {
+      if (event.key !== 'ContextMenu' && !(event.key === 'F10' && event.shiftKey)) return
+      event.preventDefault()
+      event.stopPropagation()
+      const rect = event.currentTarget.getBoundingClientRect()
+      fileContextMenu(path, { x: rect.left, y: rect.bottom })
+    }}
+  >{children}</button>
+}
+
 function MarkdownFileLink({ file, glyph, children }: {
   readonly file: { path: string; line?: number }
   readonly glyph: boolean
@@ -589,15 +615,15 @@ function MarkdownFileLink({ file, glyph, children }: {
   const preview = glyph && classifyLinkPath(file.path) === 'image' ? fileImages : undefined
   const src = preview?.resolve(file.path)
   const anchor = (
-    <button
-      type="button"
+    <MarkdownFileButton
+      path={file.path}
       className={clsx(css.fileMention, css.fileLink)}
       title={src === undefined ? file.path : undefined}
       onClick={() => { openFile(file.path, file.line === undefined ? undefined : { line: file.line }) }}
     >
       {glyph && <LinkIconMedium kind={classifyLinkPath(file.path)} className={css.linkIcon} />}
       {children}
-    </button>
+    </MarkdownFileButton>
   )
   if (src === undefined || preview === undefined) return anchor
   return <HoverCard inline anchor={anchor}

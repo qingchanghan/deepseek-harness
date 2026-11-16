@@ -12,7 +12,8 @@ import type {} from '@deepseek-ai/dsh-client-ui-sidebar-browser/client'
 import type {} from '@deepseek-ai/dsh-client-ui-input-trigger/client'
 // The `file` entry of `SidebarRightResourceParamsMap`, which types `{ params: { line } }` below.
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar-documentpreview/client'
-import { fileAddressFor } from '@deepseek-ai/dsh-util-workspace-path'
+import { fileAddressFor, isAbsoluteWorkspacePath, resolveWorkspacePath } from '@deepseek-ai/dsh-util-workspace-path'
+import { writeClipboard } from '@deepseek-ai/dsh-client-ui-primitives'
 // Type-only service and declaration merges used by the apply world.
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
@@ -29,6 +30,7 @@ import type { ChatSnapshot } from './contract/snapshot.ts'
 import { EMPTY_CHAT_SNAPSHOT } from './contract/snapshot.ts'
 import { ApprovalCommand } from './chat/ApprovalCommand.tsx'
 import { ChatView } from './chat/ChatView.tsx'
+import { FileCopyToast, type FileCopyNotice, type FileCopyToastInjected } from './chat/FileCopyToast.tsx'
 import { ChatFlow } from './chat/ChatFlow.tsx'
 import { registerChatNodeRenderers } from './chat/register-node-renderers.ts'
 import { UserContent } from './chat/UserContent.tsx'
@@ -82,6 +84,8 @@ export const inject = [
  * @param ctx - Client root context.
  */
 export function apply(ctx: Context): void {
+  const fileCopyNotice = createSnapshotStore<FileCopyNotice | null>(null)
+  let fileCopySeq = 0
   const quotaNotice = createSnapshotStore<QuotaNoticeState | null>(null)
   let quotaNoticeSeq = 0
   // Each hold is its own token, so a release can only drop the hold it was
@@ -262,6 +266,17 @@ export function apply(ctx: Context): void {
             else ctx.sidebarRight.openResource(url, { params: { line: options.line } })
             await Promise.resolve()
           },
+          copyFilePath: async (path) => {
+            const seq = ++fileCopySeq
+            const cwd = ctx.sessions.list.getSnapshot().byId[sessionId]?.cwd
+            const absolutePath = resolveWorkspacePath(cwd, path)
+            if (!isAbsoluteWorkspacePath(absolutePath)) {
+              fileCopyNotice.set({ seq, outcome: 'unresolved' })
+              return
+            }
+            const copied = await writeClipboard(absolutePath)
+            if (seq === fileCopySeq) fileCopyNotice.set({ seq, outcome: copied ? 'copied' : 'failed' })
+          },
           openExternalLink: (url) => {
             if (linkOpening.getSnapshot() === 'sidebar' && ctx.get('sidebarRightTabs')?.get('browser') !== undefined) {
               ctx.sidebarRight.openTab('browser', { params: { url } })
@@ -298,6 +313,14 @@ export function apply(ctx: Context): void {
     }, ChatView)
     return disposeView
   })
+
+  ctx.slots.inject('shell.overlay', () => ctx.slots.register({
+    name: 'shell.overlay', id: 'chat.file-copy', locale: NS,
+    inject: (): FileCopyToastInjected => ({
+      hooks: { notice: fileCopyNotice },
+      dismissNotice: () => { fileCopyNotice.set(null) },
+    }),
+  }, FileCopyToast))
 
   // The quota notice host lives in the frame-wide layer so a notice outlives
   // the Chat panel that reported it. Its chain child lets a package with a

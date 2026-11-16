@@ -24,6 +24,7 @@ import { createChatStore } from '../src/client/stores.ts'
 import { CHAT_SETTINGS_NAMESPACE, type ChatSettings } from '../src/chat-settings.ts'
 import type { LinkOpeningRowInjected } from '../src/client/settings/LinkOpeningRow.tsx'
 import type { TranscriptViewRowInjected } from '../src/client/settings/TranscriptViewRow.tsx'
+import type { FileCopyToastInjected } from '../src/client/chat/FileCopyToast.tsx'
 
 usePinnedBrowserLanguages('zh-CN')
 
@@ -101,6 +102,7 @@ async function bench(initialSettings?: ChatSettings, withBrowserRegistry = true,
   await runtime.root.declare({
     'main': { kind: 'keyed', scope: 'root' },
     'settings.general.item': { kind: 'list', scope: 'root' },
+    'shell.overlay': { kind: 'list', scope: 'root' },
   }, (_props: { renderSlot?: unknown }) => null)
   await runtime.mount({ inject: [...injectConversation], apply: applyConversation })
   const registerGroups = withProcessGroups ? undefined
@@ -137,6 +139,89 @@ async function bench(initialSettings?: ChatSettings, withBrowserRegistry = true,
 }
 
 describe('Chat inject API', () => {
+  it('reports an unresolved relative path without copying it', async () => {
+    const b = await bench()
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    vi.stubGlobal('navigator', { clipboard: { writeText } })
+    try {
+      const id = 'no-cwd' as SessionId
+      await b.runtime.sessions.add({ id, summary: {} })
+      const reference = b.runtime.sessions.retain(id)
+      await reference.ready
+      const { injected } = b.chatViewApi(reference)
+      const toast = b.runtime.slots.entries('shell.overlay').find(entry => entry.options.id === 'chat.file-copy')!
+      const injectedToast: object = toast.inject!()
+      const feedback = injectedToast as FileCopyToastInjected
+      await injected.copyFilePath('RESULTS.md')
+      expect(writeText).not.toHaveBeenCalled()
+      expect(feedback.hooks.notice.getSnapshot()).toMatchObject({ outcome: 'unresolved' })
+      await injected.copyFilePath('/remote/RESULTS.md')
+      expect(writeText).toHaveBeenCalledExactlyOnceWith('/remote/RESULTS.md')
+    } finally {
+      vi.unstubAllGlobals()
+      await b.runtime.dispose()
+    }
+  })
+
+  it('keeps the latest copy outcome when an earlier clipboard request settles late', async () => {
+    const b = await bench()
+    const first = Promise.withResolvers<undefined>()
+    const writeText = vi.fn().mockReturnValueOnce(first.promise).mockResolvedValue(undefined)
+    vi.stubGlobal('navigator', { clipboard: { writeText } })
+    try {
+      const { injected } = b.chatViewApi(b.rootReference)
+      const toast = b.runtime.slots.entries('shell.overlay').find(entry => entry.options.id === 'chat.file-copy')!
+      const injectedToast: object = toast.inject!()
+      const feedback = injectedToast as FileCopyToastInjected
+      const earlier = injected.copyFilePath('earlier.md')
+      await injected.copyFilePath('latest.md')
+      const latest = feedback.hooks.notice.getSnapshot()
+      first.reject(new Error('clipboard denied'))
+      await earlier
+      expect(feedback.hooks.notice.getSnapshot()).toBe(latest)
+      expect(latest).toMatchObject({ outcome: 'copied' })
+    } finally {
+      first.resolve(undefined)
+      vi.unstubAllGlobals()
+      await b.runtime.dispose()
+    }
+  })
+
+  it.each([
+    { cwd: '/proj', path: 'out/My Notes.md', expected: '/proj/out/My Notes.md' },
+    { cwd: '/data/shiyuan/workspace/sglang', path: 'metric_hit_rate.py', expected: '/data/shiyuan/workspace/sglang/metric_hit_rate.py' },
+    { cwd: 'C:\\work', path: 'result.json', expected: 'C:\\work\\result.json' },
+    { cwd: '/proj', path: '/remote/results.md', expected: '/remote/results.md' },
+  ])('copies $path under the owning workspace $cwd without opening a file', async ({ cwd, path, expected }) => {
+    const b = await bench()
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    vi.stubGlobal('navigator', { clipboard: { writeText } })
+    try {
+      const id = 'copy-session' as SessionId
+      await b.runtime.sessions.add({ id, summary: { cwd, host: { id: 'h20', name: 'H20' } } })
+      const reference = b.runtime.sessions.retain(id)
+      await reference.ready
+      const { injected } = b.chatViewApi(reference)
+      const toast = b.runtime.slots.entries('shell.overlay').find(entry => entry.options.id === 'chat.file-copy')!
+      const injectedToast: object = toast.inject!()
+      const feedback = injectedToast as FileCopyToastInjected
+      await injected.copyFilePath(path)
+      expect(writeText).toHaveBeenCalledExactlyOnceWith(expected)
+      expect(feedback.hooks.notice.getSnapshot()).toMatchObject({ outcome: 'copied' })
+      expect(b.sidebarRight.openResource).not.toHaveBeenCalled()
+      writeText.mockRejectedValueOnce(new Error('clipboard denied'))
+      await injected.copyFilePath(path)
+      expect(feedback.hooks.notice.getSnapshot()).toMatchObject({ outcome: 'failed' })
+      feedback.dismissNotice()
+      expect(feedback.hooks.notice.getSnapshot()).toBeNull()
+      await b.chat.dispose()
+      expect(b.runtime.slots.entries('shell.overlay').some(entry => entry.options.id === 'chat.file-copy')).toBe(false)
+    } finally {
+      vi.unstubAllGlobals()
+      await b.runtime.dispose()
+    }
+  })
+
   it('projects independent Settings choices and saves timing to Host settings', async () => {
     const b = await bench()
     try {

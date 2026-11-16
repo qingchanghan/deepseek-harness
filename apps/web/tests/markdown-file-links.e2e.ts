@@ -77,6 +77,7 @@ describe('web e2e: Markdown file links', () => {
     await seedSession(scaffold, await readFile(join(SNAPSHOT_DIR, 'session.v3.jsonl'), 'utf8'), 'markdown-file-links')
     browser = await chromium.launch()
     page = await newEnglishPage(browser)
+    await page.context().grantPermissions(['clipboard-read', 'clipboard-write'])
     tripwire = watchConsole(page)
     await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
     await page.locator('[role="treeitem"]').first().click()
@@ -88,6 +89,28 @@ describe('web e2e: Markdown file links', () => {
   afterAll(async () => {
     await browser?.close()
     await scaffold?.close()
+  })
+
+  it('copies an absolute path from the context menu and restores keyboard focus', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-copy-file-path'))
+    const source = page.getByRole('button', { name: 'src/example.txt:24–30', exact: true })
+    await source.click({ button: 'right' })
+    const menu = page.getByRole('menu')
+    await menu.waitFor()
+    await compareOrRefreshGolden(join(SNAPSHOT_DIR, 'copy-menu.expected.md'), await menu.ariaSnapshot(), MODE)
+    await page.getByRole('menuitem', { name: 'Copy absolute path', exact: true }).click()
+    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText()))
+      .toBe(join(scaffold.workspaceCwd, 'src/example.txt'))
+    await page.getByText('Absolute path copied', { exact: true }).waitFor()
+    await expect.poll(() => source.evaluate(element => element === document.activeElement)).toBe(true)
+    const absolute = page.getByRole('button', { name: 'src/example.txt:30', exact: true })
+    await absolute.focus()
+    await absolute.press('Shift+F10')
+    await menu.waitFor()
+    await page.keyboard.press('Escape')
+    await expect.poll(() => menu.count()).toBe(0)
+    await expect.poll(() => absolute.evaluate(element => element === document.activeElement)).toBe(true)
+    expect(tripwire.pageErrors).toEqual([])
   })
 
   it('previews relative and absolute links at the requested line without duplicate tabs', async () => {
@@ -124,7 +147,7 @@ describe('web e2e: Markdown file links', () => {
     expect(page.url()).toBe(beforeUrl)
     expect(tripwire.pageErrors).toEqual([])
     expect(tripwire.warnings).toEqual([])
-    await assertFixtureInventory(SNAPSHOT_DIR, ['session.v3.jsonl', 'links.expected.md', 'preview.expected.md'])
+    await assertFixtureInventory(SNAPSHOT_DIR, ['session.v3.jsonl', 'links.expected.md', 'preview.expected.md', 'copy-menu.expected.md'])
   })
 
   it('opens parent-path prose and read-card links while retaining each address across reload', async () => {

@@ -7,6 +7,39 @@ import { MarkdownText } from './markdown-test-components.tsx'
 afterEach(cleanup)
 
 describe('Markdown file links', () => {
+  it('offers actions for produced inline-code mentions using their resolved full path', () => {
+    const fileContextMenu = vi.fn()
+    const open = vi.fn()
+    const view = render(<MarkdownDelegateProvider fileContextMenu={fileContextMenu}>
+      <MarkdownText text="File: `metric_hit_rate.py`" fileMentions={{ resolve: () => ({
+        open, label: 'metric_hit_rate.py', title: '/remote/workspace/output/metric_hit_rate.py',
+      }) }} />
+    </MarkdownDelegateProvider>)
+    fireEvent.contextMenu(view.getByRole('button', { name: 'metric_hit_rate.py' }), { clientX: 10, clientY: 20 })
+    expect(fileContextMenu).toHaveBeenCalledWith('/remote/workspace/output/metric_hit_rate.py', { x: 10, y: 20 })
+    expect(open).not.toHaveBeenCalled()
+  })
+
+  it('opens file actions with decoded paths and no line fragment, without opening the preview', () => {
+    const openFile = vi.fn()
+    const fileContextMenu = vi.fn()
+    const view = render(<MarkdownDelegateProvider openFile={openFile} fileContextMenu={fileContextMenu}>
+      <MarkdownText text="[report](docs/My%20Notes.md#L24-L30)" />
+    </MarkdownDelegateProvider>)
+    const link = view.getByRole('button', { name: 'report' })
+    fireEvent.contextMenu(link, { clientX: 180, clientY: 240 })
+    expect(fileContextMenu).toHaveBeenCalledWith('docs/My Notes.md', { x: 180, y: 240 })
+    expect(openFile).not.toHaveBeenCalled()
+    expect(document.activeElement).toBe(link)
+    vi.spyOn(link, 'getBoundingClientRect').mockReturnValue(new DOMRect(10, 20, 100, 30))
+    fireEvent.keyDown(link, { key: 'F10', shiftKey: true })
+    expect(fileContextMenu).toHaveBeenLastCalledWith('docs/My Notes.md', { x: 10, y: 50 })
+    fireEvent.keyDown(link, { key: 'ContextMenu' })
+    expect(fileContextMenu).toHaveBeenCalledTimes(3)
+    fireEvent.keyDown(link, { key: 'ArrowDown' })
+    expect(fileContextMenu).toHaveBeenCalledTimes(3)
+  })
+
   it.each([
     ['src/index.ts', 'src/index.ts', undefined],
     ['/workspace/src/index.ts#L24', '/workspace/src/index.ts', { line: 24 }],
