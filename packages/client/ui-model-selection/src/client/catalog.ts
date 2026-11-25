@@ -38,7 +38,7 @@ export class ModelCatalogDirectory {
    * @param ctx - the providing plugin's context, whose `remote.session`
    * namespace carries the Host-generation catalog.
    */
-  constructor(private readonly ctx: ClientContext) {}
+  constructor(private readonly ctx: ClientContext, private readonly hostId?: string) {}
 
   /**
    * Return the current generation's catalog, sharing its one in-flight load.
@@ -46,14 +46,16 @@ export class ModelCatalogDirectory {
    */
   load(): Promise<ModelCatalog> {
     const state = this.store.getSnapshot()
-    if (state.status === 'ready' && state.value !== null) return Promise.resolve(state.value)
+    if (this.hostId === undefined && state.status === 'ready' && state.value !== null) return Promise.resolve(state.value)
     if (this.inflight !== undefined) return this.inflight
     const generation = this.generation
     this.store.update((draft) => {
+      if (this.hostId !== undefined) draft.value = null
       draft.status = 'loading'
       draft.error = null
     })
-    const operation = this.ctx.remote.session.modelCatalog().then((response) => {
+    const operation = (this.hostId === undefined ? this.ctx.remote.session.modelCatalog()
+      : this.ctx.remote.session.hostModelCatalog(this.hostId)).then((response) => {
       if (!response.ok) {
         throw new Error(`${response.error.code}: ${response.error.message}`)
       }

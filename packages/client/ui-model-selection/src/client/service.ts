@@ -72,11 +72,14 @@ export class ModelDirectoryResolver extends Service {
     if (binding === undefined) throw new Error(`ui-model-selection: session "${String(sessionId)}" resolved no binding`)
     const existing = live.directories.get(binding)
     if (existing !== undefined) return existing
+    const host = sessions.list.getSnapshot().byId[sessionId]?.host
+    const catalog = host === undefined ? this.catalog : new ModelCatalogDirectory(this.ctx, host.id)
+    if (host !== undefined) void catalog.load().catch(() => { /* the directory exposes the remote error */ })
     const directory = new ModelDirectory(
       this.ctx.remote.session,
       sessionId,
       () => sessions.subagentAddress(sessionId) === undefined,
-      this.catalog,
+      catalog,
       binding.session.projections.faceOf('modelSelection'),
       () => binding.session.getSnapshot().blank,
       (name, attributes) => this.ctx.get('productAnalytics')?.track(name, attributes),

@@ -147,6 +147,7 @@ async function bench(locale: 'zh' | 'en' = 'zh') {
   }>()
   const addressed = new Set<SessionId>()
   ctx.provide('sessions', {
+    list: createSnapshotStore({ byId: {} }),
     scope: (id: SessionId) => scopes.get(id),
     binding: (id: SessionId) => bindings.get(id),
     subagentAddress: (id: SessionId) => addressed.has(id)

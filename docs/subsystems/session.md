@@ -884,6 +884,13 @@ inspect( sessionId: SessionId, signal?: AbortSignal, ): Promise<SessionInspectio
 @Remote('modelCatalog') modelCatalog(): Promise<ModelCatalog>
 
 /**
+ * Read the model catalog of one attached host.
+ * @param id - configured host identity.
+ * @returns the destination's model groups, defaults and failures.
+ */
+@Remote async hostModelCatalog(id: string): Promise<ModelCatalog>
+
+/**
  * Report whether this deployment can hand a Session workspace path to a native desktop.
  * @returns true when the matching open operation is available.
  */

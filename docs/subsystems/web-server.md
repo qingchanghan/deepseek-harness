@@ -219,6 +219,69 @@ connected(): readonly RemoteHostHandle[]
 connection(id: string): RemoteHostHandle
 
 /**
+ * Run settings/describe on the selected SSH host.
+ * @param id - configured host identity.
+ * @returns the remote settings/describe response.
+ */
+@Remote async modelSettings(id: string): Promise<SettingsDescribeValue>
+
+/**
+ * Run llm/listProviders on the selected SSH host.
+ * @param id - configured host identity.
+ * @returns the remote llm/listProviders response.
+ */
+@Remote async modelProviders(id: string): Promise<LlmProviderInfo[]>
+
+/**
+ * Run llm/listConfigurableProviders on the selected SSH host.
+ * @param id - configured host identity.
+ * @returns the remote llm/listConfigurableProviders response.
+ */
+@Remote async configurableModelProviders(id: string): Promise<LlmConfigurableProvider[]>
+
+/**
+ * Run credentials/describe on the selected SSH host.
+ * @param id - configured host identity.
+ * @param refs - credential references to inspect.
+ * @returns the remote credentials/describe response.
+ */
+@Remote async modelCredentials(id: string, refs: string[]): Promise<Record<string, CredentialInfo>>
+
+/**
+ * Run credentials/set on the selected SSH host.
+ * @param id - configured host identity.
+ * @param ref - destination credential reference.
+ * @param value - new secret value.
+ */
+@Remote async setModelCredential(id: string, ref: string, value: string): Promise<void>
+
+/**
+ * Run credentials/unset on the selected SSH host.
+ * @param id - configured host identity.
+ * @param ref - destination credential reference.
+ */
+@Remote async unsetModelCredential(id: string, ref: string): Promise<void>
+
+/**
+ * Run settings/mutate on the selected SSH host.
+ * @param id - configured host identity.
+ * @param ns - model settings namespace.
+ * @param ops - ordered configuration edits.
+ * @param expectedRevision - revision observed by the editor.
+ * @returns the remote settings/mutate response.
+ */
+@Remote async mutateModelSettings( id: string, ns: string, ops: SettingsPathOpView[], expectedRevision: number | undefined, ): Promise<SettingsNamespaceView>
+
+/**
+ * Run llm/discoverModels on the selected SSH host.
+ * @param id - configured host identity.
+ * @param settingsNs - model adapter namespace.
+ * @param request - endpoint and credential reference to interrogate.
+ * @returns the remote llm/discoverModels response.
+ */
+@Remote async discoverModels(id: string, settingsNs: string, request: LlmModelDiscoveryRequest): Promise<LlmDiscoveredModel[]>
+
+/**
  * Read the selected Host's Workspaces, closing the baseline stream afterwards.
  * @param id - Configured Host identity.
  * @param signal - Cancel a superseded picker read.
@@ -255,6 +318,8 @@ async connect(id: string, signal?: AbortSignal): Promise<void>
  */
 async disconnect(id: string): Promise<void>
 ```
+
+Types: [CredentialInfo](credentials.md) · [LlmConfigurableProvider](llm-streaming.md) · [LlmDiscoveredModel](llm-streaming.md) · [LlmModelDiscoveryRequest](llm-streaming.md) · [LlmProviderInfo](llm-streaming.md) · [SettingsDescribeValue](settings.md) · [SettingsNamespaceView](settings.md) · [SettingsPathOpView](settings.md)
 
 Source: [`packages/api/remote-hosts/src/index.ts`](../../packages/api/remote-hosts/src/index.ts)
 

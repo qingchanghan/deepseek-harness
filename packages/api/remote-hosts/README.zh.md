@@ -11,6 +11,8 @@ kind: "package-reference"
 
 `dsh-api-remote-hosts` 把本地 Host 连接到 SSH 开发机上已有的 `dsh web` 进程。它发现远程实例、转发监听器、完成鉴权并维护连接。Session Controller 合并远程目录，并把会话操作路由给所属机器。连接管理可保存 profile 设置、报告失败、断开和重连。远程事件更新活动与标题，审批和提问则使用本地交互界面。
 
+模型设置页将提供商读取、带修订号的编辑、端点探测和凭据操作发送到选中的 SSH 主机。密钥存入该主机的凭据库。
+
 ## 目录
 
 - [使用本包](#use-this-package)

@@ -21,7 +21,7 @@
  * post-apply reload.
  */
 
-import { useId, useState } from 'react'
+import { useEffect, useId, useMemo, useState, useSyncExternalStore } from 'react'
 import type { ReactNode } from 'react'
 import { Button, IconPlusOutlineRegular, Modal, SegmentedControl } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InjectFace, PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots'
@@ -49,6 +49,10 @@ export interface ModelsSectionInjected {
   operations: ModelsOperations
   /** Settings schema and immutable path callbacks. */
   schema: SettingsSchemaOperations
+  /** Attached host choices and their connection state. */
+  listHosts?: () => Promise<readonly { id: string; name: string; status: string }[]>
+  watchHosts?: (listener: () => void) => () => void
+  forHost?: (id: string) => { controller: ModelsSettingsStore; operations: ModelsOperations }
   /** Section copy. */
   t: (key: keyof typeof en) => string
 }
@@ -241,7 +245,59 @@ export function ModelsSection(props: ModelsSectionProps): ReactNode {
     controller === undefined || useSnapshot === undefined || operations === undefined
     || schema === undefined || t === undefined
   ) return null
-  return <Loaded injected={{ controller, useSnapshot, operations, schema, t }} renderSlot={renderSlot} />
+  const local = { controller, useSnapshot, operations, schema, t }
+  return props.listHosts && props.forHost
+    ? <HostPicker local={local} renderSlot={renderSlot} list={props.listHosts} watch={props.watchHosts} bind={props.forHost} />
+    : <Loaded injected={local} renderSlot={renderSlot} />
+}
+
+type HostList = NonNullable<ModelsSectionInjected['listHosts']>
+type BindHost = NonNullable<ModelsSectionInjected['forHost']>
+
+function HostPicker({ local, renderSlot, list, watch, bind }: {
+  local: ModelsSectionFace
+  renderSlot: ModelsRenderSlot
+  list: HostList
+  watch: ModelsSectionInjected['watchHosts']
+  bind: BindHost
+}): ReactNode {
+  const [id, setId] = useState('')
+  const [hosts, setHosts] = useState<Awaited<ReturnType<HostList>>>([])
+  const [error, setError] = useState('')
+  useEffect(() => {
+    let revision = 0
+    const read = (): void => {
+      const generation = ++revision
+      void list().then((rows) => {
+        if (generation === revision) { setHosts(rows); setError('') }
+      }, (reason: unknown) => { if (generation === revision) setError(reason instanceof Error ? reason.message : String(reason)) })
+    }
+    read()
+    const unsubscribe = watch?.(read)
+    return () => { ++revision; unsubscribe?.() }
+  }, [list, watch])
+  const target = hosts.find(host => host.id === id)
+  return <>
+    {hosts.length > 0 || id ? <label className={styles['field']}>{local.t('configHost')}
+      <select className={`${styles['input']} ${styles['selectInput']}`} value={id} onChange={(event) => { setId(event.target.value) }}>
+        <option value="">{local.t('localHost')}</option>
+        {hosts.map(host => <option key={host.id} value={host.id} disabled={host.status !== 'connected'}>{host.name}</option>)}
+        {id && !target ? <option value={id} disabled>{id}</option> : null}
+      </select></label> : null}
+    {error && <p role="alert">{error}</p>}
+    {!id ? <Loaded injected={local} renderSlot={renderSlot} />
+      : target?.status === 'connected' && !error
+        ? <AttachedModels key={id} id={id} bind={bind} local={local} />
+        : <p role="alert">{local.t('hostDisconnected')}</p>}
+  </>
+}
+
+function AttachedModels({ id, bind, local }: { id: string; bind: BindHost; local: ModelsSectionFace }): ReactNode {
+  const { controller, operations } = useMemo(() => bind(id), [id, bind])
+  const store = controller.store
+  const snapshot = useSyncExternalStore(listener => store.subscribe(listener), () => store.getSnapshot())
+  return <Loaded injected={{ ...local, controller, operations, useSnapshot: selector => selector(snapshot) }}
+    renderSlot={() => null} />
 }
 
 function Loaded({ injected, renderSlot }: { injected: ModelsSectionFace; renderSlot: ModelsRenderSlot }): ReactNode {

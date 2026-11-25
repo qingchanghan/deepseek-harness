@@ -2018,6 +2018,52 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'Current connection handle.',
       },
       {
+        signature: '@Remote async modelSettings(id: string): Promise<SettingsDescribeValue>',
+        description: 'Run settings/describe on the selected SSH host.',
+        parameters: [{ name: 'id', description: 'configured host identity.' }],
+        returns: 'the remote settings/describe response.',
+      },
+      {
+        signature: '@Remote async modelProviders(id: string): Promise<LlmProviderInfo[]>',
+        description: 'Run llm/listProviders on the selected SSH host.',
+        parameters: [{ name: 'id', description: 'configured host identity.' }],
+        returns: 'the remote llm/listProviders response.',
+      },
+      {
+        signature: '@Remote async configurableModelProviders(id: string): Promise<LlmConfigurableProvider[]>',
+        description: 'Run llm/listConfigurableProviders on the selected SSH host.',
+        parameters: [{ name: 'id', description: 'configured host identity.' }],
+        returns: 'the remote llm/listConfigurableProviders response.',
+      },
+      {
+        signature: '@Remote async modelCredentials(id: string, refs: string[]): Promise<Record<string, CredentialInfo>>',
+        description: 'Run credentials/describe on the selected SSH host.',
+        parameters: [{ name: 'id', description: 'configured host identity.' }, { name: 'refs', description: 'credential references to inspect.' }],
+        returns: 'the remote credentials/describe response.',
+      },
+      {
+        signature: '@Remote async setModelCredential(id: string, ref: string, value: string): Promise<void>',
+        description: 'Run credentials/set on the selected SSH host.',
+        parameters: [{ name: 'id', description: 'configured host identity.' }, { name: 'ref', description: 'destination credential reference.' }, { name: 'value', description: 'new secret value.' }],
+      },
+      {
+        signature: '@Remote async unsetModelCredential(id: string, ref: string): Promise<void>',
+        description: 'Run credentials/unset on the selected SSH host.',
+        parameters: [{ name: 'id', description: 'configured host identity.' }, { name: 'ref', description: 'destination credential reference.' }],
+      },
+      {
+        signature: '@Remote async mutateModelSettings( id: string, ns: string, ops: SettingsPathOpView[], expectedRevision: number | undefined, ): Promise<SettingsNamespaceView>',
+        description: 'Run settings/mutate on the selected SSH host.',
+        parameters: [{ name: 'id', description: 'configured host identity.' }, { name: 'ns', description: 'model settings namespace.' }, { name: 'ops', description: 'ordered configuration edits.' }, { name: 'expectedRevision', description: 'revision observed by the editor.' }],
+        returns: 'the remote settings/mutate response.',
+      },
+      {
+        signature: '@Remote async discoverModels(id: string, settingsNs: string, request: LlmModelDiscoveryRequest): Promise<LlmDiscoveredModel[]>',
+        description: 'Run llm/discoverModels on the selected SSH host.',
+        parameters: [{ name: 'id', description: 'configured host identity.' }, { name: 'settingsNs', description: 'model adapter namespace.' }, { name: 'request', description: 'endpoint and credential reference to interrogate.' }],
+        returns: 'the remote llm/discoverModels response.',
+      },
+      {
         signature: '@Remote workspaces(id: string, signal: AbortSignal): Promise<RemoteHostWorkspaces>',
         description: 'Read the selected Host\'s Workspaces, closing the baseline stream afterwards.',
         parameters: [{ name: 'id', description: 'Configured Host identity.' }, { name: 'signal', description: 'Cancel a superseded picker read.' }],
@@ -2185,6 +2231,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Describe every currently routable model for Host-generation selectors.',
         parameters: [],
         returns: 'provider-grouped models, the deployment default, and isolated provider failures.',
+      },
+      {
+        signature: '@Remote async hostModelCatalog(id: string): Promise<ModelCatalog>',
+        description: 'Read the model catalog of one attached host.',
+        parameters: [{ name: 'id', description: 'configured host identity.' }],
+        returns: 'the destination\'s model groups, defaults and failures.',
       },
       {
         signature: '@Remote canOpenWorkspacePath(): boolean',

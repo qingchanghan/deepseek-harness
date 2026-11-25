@@ -2,6 +2,9 @@
 
 /** English strings (the key-set source of truth for this pair). */
 export const en = {
+  localHost: 'Local',
+  configHost: 'Configuration host',
+  hostDisconnected: 'Connect this host to edit its models.',
   nav: 'Models',
   deepSeekAccount: 'DeepSeek Account',
   title: 'Models',
@@ -143,6 +146,9 @@ export type ModelsKey = keyof typeof en
 
 /** Chinese strings (same keys as {@link en}). */
 export const zh: { [Key in keyof typeof en]: string } = {
+  localHost: 'Local',
+  configHost: '配置主机',
+  hostDisconnected: '连接此主机后即可编辑模型。',
   nav: '模型',
   deepSeekAccount: 'DeepSeek 账号',
   title: '模型',

@@ -11,6 +11,8 @@ English | [中文](README.zh.md)
 
 `dsh-api-remote-hosts` attaches the local Host to existing `dsh web` processes on SSH development machines. It discovers remote instances, forwards their listeners, authenticates, and maintains their connections. The Session Controller merges remote catalogs and routes Session operations to the owning machine. Connection management saves profile settings, reports failures, and supports disconnecting and reconnecting. Remote events keep activity and titles current, while approval and question requests use the local interaction UI.
 
+The Models settings page sends provider reads, revision-checked edits, discovery and credential operations to the selected SSH host. Keys are written to that host’s credential store.
+
 ## Table of Contents
 
 - [Use this package](#use-this-package)

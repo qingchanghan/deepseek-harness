@@ -203,6 +203,7 @@ export class ModelsSettingsStore {
     private readonly ctx: ClientContext,
     private readonly schema: SettingsSchemaOperations,
     private readonly describeFace: SettingsDescribeFace,
+    private readonly hostId?: string,
   ) {}
 
   /**
@@ -229,15 +230,19 @@ export class ModelsSettingsStore {
   /** Publish one joined answer; stale answers leave the current refresh in charge. */
   private async read(generation: number): Promise<void> {
     this.store.update((s) => { s.status = 'loading'; s.error = null })
-    const [registered, declared] = await Promise.all([
-      this.ctx.remote.llm.listProviders(),
-      this.ctx.remote.llm.listConfigurableProviders(),
-      this.describeFace.ensure(),
+    const remote = this.ctx.remote
+    const id = this.hostId
+    const [registered, declared, mirrored] = await Promise.all([
+      id === undefined ? remote.llm.listProviders() : remote.remoteHosts.modelProviders(id),
+      id === undefined ? remote.llm.listConfigurableProviders() : remote.remoteHosts.configurableModelProviders(id),
+      id === undefined
+        ? this.describeFace.ensure().then(() => this.describeFace.getSnapshot())
+        : remote.remoteHosts.modelSettings(id).then(result => result.ok
+          ? { view: result.value, error: null } : { view: undefined, error: result.error.message }),
     ])
     if (generation !== this.generation) return
     if (!registered.ok) { this.failLoad(registered.error.message); return }
     if (!declared.ok) { this.failLoad(declared.error.message); return }
-    const mirrored = this.describeFace.getSnapshot()
     if (mirrored.view === undefined) {
       /* v8 ignore next -- SettingsDescribeFace.ensure settles with a view or the read's error */
       if (mirrored.error === null) throw new Error('settings describe settled with neither a view nor an error')
@@ -265,7 +270,7 @@ export class ModelsSettingsStore {
       }
     })
     if (rows.some(row => row.entry.provider === 'deepseek-account')) {
-      const catalog = await this.ctx.remote.session.modelCatalog()
+      const catalog = await (id === undefined ? remote.session.modelCatalog() : remote.session.hostModelCatalog(id))
       for (const row of rows) {
         if (row.entry.provider === 'deepseek-account') row.accountAvailable = catalog.ok
           && catalog.value.groups.some(group => group.id === 'deepseek-account' && group.models.length > 0)
@@ -277,7 +282,8 @@ export class ModelsSettingsStore {
     let credentialError: string | null = null
     // credentials.describe accepts at most 64 references per request.
     for (let index = 0; index < refs.length; index += 64) {
-      const response = await this.ctx.remote.credentials.describe(refs.slice(index, index + 64))
+      const batch = refs.slice(index, index + 64)
+      const response = await (id === undefined ? remote.credentials.describe(batch) : remote.remoteHosts.modelCredentials(id, batch))
       // Credential state is an enrichment for the Models page: a failure
       // degrades the badge instead of failing the load. The onboarding
       // projection below retains the failure distinction.

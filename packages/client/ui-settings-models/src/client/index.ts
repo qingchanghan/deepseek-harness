@@ -65,7 +65,7 @@ export function refreshIfLoaded(controller: ModelsSettingsStore): void {
  * constrained; registration depends on each slot through `slots.inject()`.
  */
 export const inject = [
-  'slots', 'locale', 'remote', 'remote.credentials', 'remote.llm', 'remote.settings', 'remote.session',
+  'slots', 'locale', 'remote', 'remote.credentials', 'remote.remoteHosts', 'remote.llm', 'remote.settings', 'remote.session',
   'configForms', 'settingsSchema',
 ]
 
@@ -90,7 +90,23 @@ export function apply(ctx: ClientContext): void {
   // Registration-time text (the nav label thunk) and the inject faces share
   // one bound translate; copy freshness rides the locale revision.
   const t = ctx.locale.bind(NS) as ModelsSectionInjected['t']
+  const hostEditor: Pick<ModelsSectionInjected, 'listHosts' | 'watchHosts' | 'forHost'> = {
+    listHosts: async () => {
+      const result = await ctx.remote.remoteHosts.describe()
+      if (!result.ok) {
+        if (result.error.code === 'gateway/service-unavailable' || result.error.code === 'gateway/definition-unavailable') return []
+        throw new Error(result.error.message)
+      }
+      return result.value.hosts
+    },
+    watchHosts: listener => ctx.remote.$on('remote-hosts/changed', listener),
+    forHost: id => ({
+      controller: new ModelsSettingsStore(ctx, schema, ctx.configForms.describe(), id),
+      operations: createModelsOperations(ctx, id),
+    }),
+  }
   const injected = (): ModelsSectionInjected => ({
+    ...hostEditor,
     controller,
     hooks: { snapshot: controller.store },
     operations,

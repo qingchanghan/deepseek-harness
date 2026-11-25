@@ -220,7 +220,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-api-remote-hosts`
 
 - `refs`: `Volatile` (`@deepseek-ai/cordis`)
-- `source`: [`packages/api/remote-hosts/src/index.ts:47`](../packages/api/remote-hosts/src/index.ts)
+- `source`: [`packages/api/remote-hosts/src/index.ts:51`](../packages/api/remote-hosts/src/index.ts)
 
 ```ts config-catalog
 /** Remote Hosts deployment configuration. */

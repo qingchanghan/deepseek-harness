@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { delimiter, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { chromium, type Browser, type Page } from 'playwright'
-import { writeComposerDraft, saveFailureShot } from './support.ts'
+import { openSettings, writeComposerDraft, saveFailureShot } from './support.ts'
 import { SESSION_FORMAT_VERSION, Session, SessionId } from '@deepseek-ai/dsh-session'
 import { ToolCallId, createAssistantMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
@@ -371,5 +371,38 @@ describe.skipIf(process.platform === 'win32' || MODE === 'record')('web e2e: SSH
 
   it('keeps its borrowed recorded-session inventory closed', async () => {
     await assertFixtureInventory(SNAPSHOT_DIR, ['hosts.expected.md', 'sidebar.expected.md', 'new-session.expected.md'])
+  })
+
+  it('saves a remote-only model and reads it through the remote conversation picker', async () => {
+    const probe = 'remote-only-model'
+    await openSettings(page, 'zh')
+    const settings = page.getByRole('dialog', { name: '设置' })
+    await settings.getByRole('button', { name: '模型', exact: true }).click()
+    await settings.getByLabel('配置主机').selectOption({ label: 'Loopback development machine' })
+    await settings.getByRole('button', { name: '添加模型提供商' }).click()
+    await settings.getByRole('tab', { name: '自定义模型 API' }).click()
+    const custom = settings.getByRole('tabpanel', { name: '自定义模型 API' })
+    await custom.getByLabel('Provider ID').fill('remote-only-provider')
+    await custom.getByLabel('API 地址').fill('https://models.example.invalid/v1')
+    await custom.getByRole('button', { name: '添加模型', exact: true }).click()
+    await custom.getByLabel('模型 ID 1').fill(probe)
+    await custom.getByLabel('API 密钥').fill('sk-e2e-remote-only')
+    await custom.getByRole('button', { name: '创建提供商', exact: true }).click()
+    await expect.poll(async () => (await remote.ctx.sessionController.modelCatalog()).groups
+      .some(group => group.models.some(model => model.id === probe))).toBe(true)
+    expect((await local.ctx.sessionController.modelCatalog()).groups
+      .some(group => group.models.some(model => model.id === probe))).toBe(false)
+    const ref = 'REMOTE_ONLY_PROVIDER_API_KEY'
+    await expect.poll(async () => (await remote.ctx.credentialsController.describe([ref]))[ref]?.configured).toBe(true)
+    expect((await local.ctx.credentialsController.describe([ref]))[ref]?.configured).toBe(false)
+    await page.keyboard.press('Escape')
+    await settings.waitFor({ state: 'hidden' })
+    await page.locator('[data-sidebar-hosts]').getByRole('treeitem', { name: /^Recorded remote Session/ }).click()
+    await page.getByText('LIGHTHOUSE', { exact: true }).waitFor()
+    await page.getByRole('button', { name: /选择模型/ }).click()
+    const drill = page.getByRole('menuitem', { name: /^模型/ })
+    if (await drill.isVisible()) await drill.click()
+    await page.getByRole('menuitemradio', { name: probe, exact: true }).click()
+    await page.getByRole('button', { name: `选择模型，当前 ${probe}`, exact: true }).waitFor()
   })
 })

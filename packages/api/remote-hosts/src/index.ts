@@ -12,7 +12,10 @@
  */
 
 import { type Context, type Volatile } from '@deepseek-ai/cordis'
-import { Remote, RemoteError, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
+import { Remote, RemoteError, principalOf, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
+import type { SettingsDescribeValue, SettingsNamespaceView, SettingsPathOpView } from '@deepseek-ai/dsh-settings/types'
+import type { CredentialInfo } from '@deepseek-ai/dsh-credentials/types'
+import type { LlmProviderInfo, LlmConfigurableProvider, LlmModelDiscoveryRequest, LlmDiscoveredModel } from '@deepseek-ai/dsh-llm/types'
 import type {} from '@deepseek-ai/dsh-settings'
 import type {} from '@deepseek-ai/cordis-plugin-loader'
 // Generated Remote descriptors validate wire values with Zod.
@@ -29,6 +32,7 @@ export { RemoteHostFailure } from './remote-client.ts'
 export type { RemoteClientOptions } from './remote-client.ts'
 export type { SshTarget, Tunnel } from './ssh.ts'
 
+const modelNamespaces = new Set(['llm-pi-ai', 'llm-deepseek'])
 /** Max characters of one recorded attachment failure. */
 const MAX_ERROR_LENGTH = 500
 
@@ -270,6 +274,104 @@ export default class RemoteHosts extends TypertRemoteService {
     const host = this.connected().find(candidate => candidate.id === id)
     if (host === undefined) throw new RemoteError('remote-hosts/not-connected', `Connect ${id} before selecting a Workspace`, { id })
     return host
+  }
+
+  private modelConnection(id: string): RemoteHostHandle {
+    if (principalOf(this.ctx.invocation) !== undefined) {
+      throw new RemoteError('gateway/bad-request', 'Remote model settings require the host owner', {})
+    }
+    return this.connection(id)
+  }
+
+  /**
+   * Run settings/describe on the selected SSH host.
+   * @param id - configured host identity.
+   * @returns the remote settings/describe response.
+   */
+  @Remote
+  async modelSettings(id: string): Promise<SettingsDescribeValue> {
+    const view = await this.modelConnection(id).invoke('settings/describe', {}) as SettingsDescribeValue
+    return { ...view, hasDocument: false, namespaces: view.namespaces.filter(row => modelNamespaces.has(row.ns)) }
+  }
+
+  /**
+   * Run llm/listProviders on the selected SSH host.
+   * @param id - configured host identity.
+   * @returns the remote llm/listProviders response.
+   */
+  @Remote
+  async modelProviders(id: string): Promise<LlmProviderInfo[]> {
+    return await this.modelConnection(id).invoke('llm/listProviders', {}) as LlmProviderInfo[]
+  }
+
+  /**
+   * Run llm/listConfigurableProviders on the selected SSH host.
+   * @param id - configured host identity.
+   * @returns the remote llm/listConfigurableProviders response.
+   */
+  @Remote
+  async configurableModelProviders(id: string): Promise<LlmConfigurableProvider[]> {
+    return await this.modelConnection(id).invoke('llm/listConfigurableProviders', {}) as LlmConfigurableProvider[]
+  }
+
+  /**
+   * Run credentials/describe on the selected SSH host.
+   * @param id - configured host identity.
+   * @param refs - credential references to inspect.
+   * @returns the remote credentials/describe response.
+   */
+  @Remote
+  async modelCredentials(id: string, refs: string[]): Promise<Record<string, CredentialInfo>> {
+    return await this.modelConnection(id).invoke('credentials/describe', { refs }) as Record<string, CredentialInfo>
+  }
+
+  /**
+   * Run credentials/set on the selected SSH host.
+   * @param id - configured host identity.
+   * @param ref - destination credential reference.
+   * @param value - new secret value.
+   */
+  @Remote
+  async setModelCredential(id: string, ref: string, value: string): Promise<void> {
+    await this.modelConnection(id).invoke('credentials/set', { ref, value })
+  }
+
+  /**
+   * Run credentials/unset on the selected SSH host.
+   * @param id - configured host identity.
+   * @param ref - destination credential reference.
+   */
+  @Remote
+  async unsetModelCredential(id: string, ref: string): Promise<void> {
+    await this.modelConnection(id).invoke('credentials/unset', { ref })
+  }
+
+  /**
+   * Run settings/mutate on the selected SSH host.
+   * @param id - configured host identity.
+   * @param ns - model settings namespace.
+   * @param ops - ordered configuration edits.
+   * @param expectedRevision - revision observed by the editor.
+   * @returns the remote settings/mutate response.
+   */
+  @Remote
+  async mutateModelSettings(
+    id: string, ns: string, ops: SettingsPathOpView[], expectedRevision: number | undefined,
+  ): Promise<SettingsNamespaceView> {
+    if (!modelNamespaces.has(ns)) throw new RemoteError('gateway/bad-request', 'Expected a model settings namespace', {})
+    return await this.modelConnection(id).invoke('settings/mutate', { ns, ops, expectedRevision }) as SettingsNamespaceView
+  }
+
+  /**
+   * Run llm/discoverModels on the selected SSH host.
+   * @param id - configured host identity.
+   * @param settingsNs - model adapter namespace.
+   * @param request - endpoint and credential reference to interrogate.
+   * @returns the remote llm/discoverModels response.
+   */
+  @Remote
+  async discoverModels(id: string, settingsNs: string, request: LlmModelDiscoveryRequest): Promise<LlmDiscoveredModel[]> {
+    return await this.modelConnection(id).invoke('llm/discoverModels', { settingsNs, request }) as LlmDiscoveredModel[]
   }
 
   /**

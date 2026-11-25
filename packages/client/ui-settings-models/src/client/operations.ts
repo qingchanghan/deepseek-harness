@@ -71,26 +71,31 @@ export interface ModelsOperations {
  * Bind the page's Host operations to the plugin's own Remote namespaces.
  * @param ctx - the page plugin's context, which declares `remote.credentials`,
  * `remote.llm`, and `remote.settings` in its own `inject`.
+ * @param hostId - SSH host to edit, or omit for local settings.
  * @returns the callbacks the section and its cards are injected with.
  */
-export function createModelsOperations(ctx: ClientContext): ModelsOperations {
+export function createModelsOperations(ctx: ClientContext, hostId?: string): ModelsOperations {
   return {
     storeCredential: async (ref, value) => {
-      const response = await ctx.remote.credentials.set(ref, value)
+      const response = await (hostId === undefined ? ctx.remote.credentials.set(ref, value)
+        : ctx.remote.remoteHosts.setModelCredential(hostId, ref, value))
       return response.ok ? undefined : response.error.message
     },
     removeCredential: async (ref) => {
-      const response = await ctx.remote.credentials.unset(ref)
+      const response = await (hostId === undefined ? ctx.remote.credentials.unset(ref)
+        : ctx.remote.remoteHosts.unsetModelCredential(hostId, ref))
       return response.ok ? undefined : response.error.message
     },
     writeSettings: async (ns, ops, expectedRevision) => {
-      const response = await ctx.remote.settings.mutate(ns, ops, expectedRevision)
+      const response = await (hostId === undefined ? ctx.remote.settings.mutate(ns, ops, expectedRevision)
+        : ctx.remote.remoteHosts.mutateModelSettings(hostId, ns, ops, expectedRevision))
       if (response.ok) return { kind: 'written', view: response.value }
       const { code, message } = response.error
       return code === 'settings/conflict' ? { kind: 'conflict', message } : { kind: 'refused', message }
     },
     discoverModels: async (settingsNs, request) => {
-      const response = await ctx.remote.llm.discoverModels(settingsNs, request)
+      const response = await (hostId === undefined ? ctx.remote.llm.discoverModels(settingsNs, request)
+        : ctx.remote.remoteHosts.discoverModels(hostId, settingsNs, request))
       return response.ok
         ? { kind: 'found', models: response.value }
         : { kind: 'refused', message: response.error.message }

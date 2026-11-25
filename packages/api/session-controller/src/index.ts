@@ -349,6 +349,18 @@ export class SessionController extends TypertRemoteService {
   }
 
   /**
+   * Read the model catalog of one attached host.
+   * @param id - configured host identity.
+   * @returns the destination's model groups, defaults and failures.
+   */
+  @Remote
+  async hostModelCatalog(id: string): Promise<ModelCatalog> {
+    const hosts = this.ctx.get('remoteHosts')
+    if (hosts === undefined) throw new RemoteError('remote-hosts/not-found', 'Remote hosts are unavailable', { id })
+    return await hosts.connection(id).invoke('session/modelCatalog', {}) as ModelCatalog
+  }
+
+  /**
    * Report whether this deployment can hand a Session workspace path to a native desktop.
    * @returns true when the matching open operation is available.
    */
