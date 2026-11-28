@@ -87,49 +87,60 @@ async function loadComposition(): Promise<{ ctx: Context; settingsPath: string }
 }
 
 describe('llm-pi-ai real dormant composition', () => {
-  it.each(['default', 'low', 'medium', 'high'] as const)('selects Argon %s thinking through a settings-only Google route', async (level) => {
-    vi.stubEnv('PI_COMPOSITION_KEY', '')
-    const server = await mockServer([{ events: [JSON.stringify({
-      candidates: [{ content: { role: 'model', parts: [{ text: 'hello' }] }, finishReason: 'STOP' }],
-      usageMetadata: { promptTokenCount: 3, candidatesTokenCount: 1, totalTokenCount: 4 },
-    })] }])
-    const { ctx } = await loadComposition()
-    await ctx.settings.update('llm-pi-ai', {
-      providers: {
-        google: {
-          apiKeyEnv: 'PI_COMPOSITION_KEY',
-          baseURL: `${server.url}/gateway/v1beta`,
-          reasoning: 'high',
-          models: [{ id: 'gemini-4-argon', input: ['text', 'image'], reasoningEfforts: { low: 'LOW', medium: 'MEDIUM', high: 'HIGH' } }],
+  const coreLevels = ['low', 'medium', 'high'] as const
+  const googleLevelCases: { model: string; levels: readonly string[]; budget?: number }[] = [
+    ...['gemini-4-argon', 'gemini-4-carbon'].map(model => ({ model, levels: coreLevels })),
+    { model: 'gemini-4-neon', levels: [...coreLevels, 'xhigh'] },
+    { model: 'gemini-future-gateway-alias', levels: [...coreLevels, 'xhigh'] },
+    { model: 'gemini-2.5-pro', levels: ['high'], budget: 32768 },
+  ]
+  it.each(googleLevelCases.flatMap(({ model, levels, budget }) =>
+    ['default', ...levels].map(level => ({ model, level, levels, budget }))))(
+    'selects $model $level thinking through a settings-only Google route', async ({ model, level, levels, budget }) => {
+      vi.stubEnv('PI_COMPOSITION_KEY', '')
+      const server = await mockServer([{ events: [JSON.stringify({
+        candidates: [{ content: { role: 'model', parts: [{ text: 'hello' }] }, finishReason: 'STOP' }],
+        usageMetadata: { promptTokenCount: 3, candidatesTokenCount: 1, totalTokenCount: 4 },
+      })] }])
+      const { ctx } = await loadComposition()
+      const reasoningEfforts = Object.fromEntries(levels.map(effort => [effort, budget === undefined ? effort.toUpperCase() : effort]))
+      await ctx.settings.update('llm-pi-ai', {
+        providers: {
+          google: {
+            apiKeyEnv: 'PI_COMPOSITION_KEY',
+            baseURL: `${server.url}/gateway/v1beta`,
+            reasoning: 'high',
+            models: [{ id: model, input: ['text', 'image'], reasoningEfforts }],
+          },
         },
-      },
-    })
-    await expect(ctx.llm.resolveModelInfo('google', 'gemini-4-argon')).resolves.toMatchObject({
-      reasoning: { efforts: [{ id: 'low' }, { id: 'medium' }, { id: 'high' }], defaultEffort: 'high' },
-    })
-    const request = {
-      provider: 'google', model: 'gemini-4-argon',
-      ...(level === 'default' ? {} : { reasoningEffort: ReasoningEffortId(level) }),
-      messages: [createUserMessage({
-        content: [{ type: 'text', text: 'hi' }],
-        source: { kind: 'model', provider: 'google', model: 'gemini-4-argon' },
-      })],
-    }
-    const result = await assemble(ctx, request)
-    expect(result.finish).toEqual({ kind: 'stop' })
-    expect(result.message.content).toEqual([{ type: 'text', text: 'hello' }])
-    expect(server.paths).toEqual(['/gateway/v1beta/models/gemini-4-argon:streamGenerateContent?alt=sse'])
-    expect(server.headers[0]?.['x-goog-api-key']).toBe('key-from-store')
-    expect(server.requests[0]).toMatchObject({
-      generationConfig: { thinkingConfig: { thinkingLevel: level === 'default' ? 'HIGH' : level.toUpperCase(), includeThoughts: true } },
-    })
-    expect(server.requests[0]).not.toHaveProperty('generationConfig.thinkingConfig.thinkingBudget')
-    for (const unsupported of ['off', 'minimal', 'xhigh', 'max']) {
-      await expect(assemble(ctx, { ...request, reasoningEffort: ReasoningEffortId(unsupported) }))
-        .resolves.toMatchObject({ finish: { kind: 'error', failure: { code: 'UNSUPPORTED_REASONING_EFFORT' } } })
-    }
-    expect(server.requests).toHaveLength(1)
-  })
+      })
+      await expect(ctx.llm.resolveModelInfo('google', model)).resolves.toMatchObject({
+        reasoning: { efforts: levels.map(id => ({ id })), defaultEffort: 'high' },
+      })
+      const request = {
+        provider: 'google', model,
+        ...(level === 'default' ? {} : { reasoningEffort: ReasoningEffortId(level) }),
+        messages: [createUserMessage({
+          content: [{ type: 'text', text: 'hi' }],
+          source: { kind: 'model', provider: 'google', model },
+        })],
+      }
+      const result = await assemble(ctx, request)
+      expect(result.finish).toEqual({ kind: 'stop' })
+      expect(result.message.content).toEqual([{ type: 'text', text: 'hello' }])
+      expect(server.paths).toEqual([`/gateway/v1beta/models/${model}:streamGenerateContent?alt=sse`])
+      expect(server.headers[0]?.['x-goog-api-key']).toBe('key-from-store')
+      const thinkingConfig = budget === undefined
+        ? { thinkingLevel: level === 'default' ? 'HIGH' : level.toUpperCase(), includeThoughts: true }
+        : { thinkingBudget: budget, includeThoughts: true }
+      expect(server.requests[0]).toHaveProperty('generationConfig.thinkingConfig', thinkingConfig)
+      for (const unsupported of ['off', 'minimal', 'xhigh', 'max'].filter(effort => !levels.includes(effort))) {
+        await expect(assemble(ctx, { ...request, reasoningEffort: ReasoningEffortId(unsupported) }))
+          .resolves.toMatchObject({ finish: { kind: 'error', failure: { code: 'UNSUPPORTED_REASONING_EFFORT' } } })
+      }
+      expect(server.requests).toHaveLength(1)
+    },
+  )
 
   it('boots with zero routes and registers one the moment settings supply a profile', async () => {
     vi.stubEnv('PI_COMPOSITION_KEY', '')

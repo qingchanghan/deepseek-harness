@@ -1,0 +1,23 @@
+- id: llm-deepseek
+  disabled: true
+
+- id: llm-pi-ai
+  config:
+    providers:
+      google:
+        apiKeyEnv: PI_SNAPSHOT_KEY
+        reasoning: xhigh
+        models:
+          - id: gemini-4-neon
+            input: [text, image]
+            contextWindow: 1048576
+            maxTokens: 65536
+            reasoningEfforts:
+              low: LOW
+              medium: MEDIUM
+              high: HIGH
+              xhigh: XHIGH
+
+- insert:
+    - id: llm-replay
+      name: '@deepseek-ai/dsh-llm-replay'

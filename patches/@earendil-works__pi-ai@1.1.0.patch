@@ -22,18 +22,84 @@ index ca40f1b4a4e99f441503cf364822073a7a6c478a..14c204261b3f6c47f8950cf44f0fb9f8
          stream.push({ type: "toolcall_delta", contentIndex: index, delta: delta.toolUse.input || "", partial: output });
      }
      else if (delta?.reasoningContent) {
+diff --git a/dist/api/google-shared.d.ts b/dist/api/google-shared.d.ts
+--- a/dist/api/google-shared.d.ts
++++ b/dist/api/google-shared.d.ts
+@@ -5,11 +5,10 @@
+ import type { Model, StopReason, StreamOptions, ThinkingLevel, Tool, TranscriptContext } from "../types.ts";
+ type GoogleApiType = "google-generative-ai" | "google-vertex";
+ /**
+- * Thinking level for Gemini 3 models.
+- * Mirrors Google's ThinkingLevel enum values.
++ * Discrete thinking level sent to the Google API.
+  */
+-export type GoogleApiThinkingLevel = "THINKING_LEVEL_UNSPECIFIED" | "MINIMAL" | "LOW" | "MEDIUM" | "HIGH";
+-export type ResolvedGoogleThinkingLevel = Exclude<ThinkingLevel, "xhigh" | "max">;
++export type GoogleApiThinkingLevel = "THINKING_LEVEL_UNSPECIFIED" | "MINIMAL" | "LOW" | "MEDIUM" | "HIGH" | "XHIGH";
++export type ResolvedGoogleThinkingLevel = Exclude<ThinkingLevel, "max">;
+ /** Resolve a supported pi level or model-specific Google mapping to a standard Google level. */
+ export declare function resolveGoogleThinkingLevel<T extends GoogleApiType>(model: Model<T>, level: ThinkingLevel): ResolvedGoogleThinkingLevel;
+ /**
+@@ -19,8 +18,8 @@
+  */
+ export declare function usesGoogleThinkingLevel<T extends GoogleApiType>(model: Model<T>): boolean;
+ export declare function toGoogleThinkingLevel(level: ResolvedGoogleThinkingLevel): GoogleApiThinkingLevel;
+-export declare function toGoogleSdkThinkingLevel(level: GoogleApiThinkingLevel): GoogleSdkThinkingLevel;
+-export declare function getDisabledGoogleThinkingConfig<T extends GoogleApiType>(model: Model<T>): ThinkingConfig;
++export declare function toGoogleSdkThinkingLevel(level: GoogleApiThinkingLevel): GoogleSdkThinkingLevel | "XHIGH";
++export declare function getDisabledGoogleThinkingConfig<T extends GoogleApiType>(model: Model<T>): Omit<ThinkingConfig, "thinkingLevel"> & { thinkingLevel?: GoogleSdkThinkingLevel | "XHIGH" };
+ /**
+  * Determines whether a streamed Gemini `Part` should be treated as "thinking".
+  *
 diff --git a/dist/api/google-shared.js b/dist/api/google-shared.js
 --- a/dist/api/google-shared.js
 +++ b/dist/api/google-shared.js
-@@ -36,6 +36,8 @@ export function resolveGoogleThinkingLevel(model, level) {
+@@ -14,6 +14,7 @@
+     LOW: GoogleSdkThinkingLevel.LOW,
+     MEDIUM: GoogleSdkThinkingLevel.MEDIUM,
+     HIGH: GoogleSdkThinkingLevel.HIGH,
++    XHIGH: "XHIGH",
+ };
+ /** Resolve a supported pi level or model-specific Google mapping to a standard Google level. */
+ export function resolveGoogleThinkingLevel(model, level) {
+@@ -25,9 +26,12 @@
+         case "medium":
+         case "high":
+             return resolvedLevel;
+-        default:
+-            throw new Error(`Unsupported Google thinking level mapping for ${model.provider}/${model.id}: ${level} -> ${String(mapped)}`);
+-    }
++        case "xhigh":
++            if (usesGoogleThinkingLevel(model))
++                return resolvedLevel;
++            break;
++    }
++    throw new Error(`Unsupported Google thinking level mapping for ${model.provider}/${model.id}: ${level} -> ${String(mapped)}`);
+ }
+ /**
+  * Whether this model uses Gemini's discrete `thinkingLevel` control instead of
+@@ -35,7 +39,12 @@
+  * model's `thinkingLevelMap`; this only selects the Google wire format.
   */
  export function usesGoogleThinkingLevel(model) {
++    // Explicit Google wire values identify discrete thinking on configured models.
++    if (Object.values(model.thinkingLevelMap ?? {}).some(value => typeof value === "string" && Object.hasOwn(GOOGLE_SDK_THINKING_LEVEL_MAP, value)))
++        return true;
      const id = model.id.toLowerCase();
-+    if (id === "gemini-4-argon")
++    if (id === "gemini-4-argon" || id === "gemini-4-carbon")
 +        return true;
      return (
      // Match Gemini 3 Pro/Flash IDs with or without a minor version, such as
      // gemini-3-flash-preview, gemini-3.1-pro-preview, and gemini-3.8-flash.
+@@ -55,6 +64,8 @@
+             return "MEDIUM";
+         case "high":
+             return "HIGH";
++        case "xhigh":
++            return "XHIGH";
+     }
+ }
+ export function toGoogleSdkThinkingLevel(level) {
 diff --git a/dist/api/mistral-conversations.js b/dist/api/mistral-conversations.js
 index 2fc3ad343af090a919f5b71454b29f23b009fc21..64aa8a4ab2461484f22066913455518f69157857 100644
 --- a/dist/api/mistral-conversations.js

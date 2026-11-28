@@ -1,0 +1,11 @@
+version: 1
+scenario: pi-ai-google-neon-xhigh
+profile: headless
+composition: pi-ai-google-neon-xhigh
+recording: authored
+environment:
+  PI_SNAPSHOT_KEY: keyless-replay
+header:
+  class: pi-ai-google-neon-xhigh
+  pin: true
+  toolSchemasSource: text-turn
