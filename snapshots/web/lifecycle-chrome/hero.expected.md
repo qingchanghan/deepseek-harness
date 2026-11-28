@@ -3,15 +3,20 @@
 - button "New session": New Session
 - navigation "Global panels":
   - button "Plugins"
+  - button "Hosts"
+  - button "Usage costs"
   - button "Automation tasks"
 - text: Workspaces
 - button "Search sessions"
 - textbox "Search session names"
 - button "View options"
 - button "Add workspace"
-- tree "Sessions":
-  - treeitem "workspace" [expanded]
-  - treeitem "New Session" [selected]
+- group:
+  - text: Local
+  - tree "Sessions":
+    - treeitem "workspace" [expanded]
+    - treeitem "New Session" [selected]
+- button "Manage remote hosts…"
 - button "Account menu": More
 - banner:
   - button "Open right sidebar"

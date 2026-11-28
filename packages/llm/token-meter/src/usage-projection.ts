@@ -78,8 +78,11 @@ const pressureSchema: z.ZodType<ContextPressureProjection> = z.object({
 const pressureFrom = (usage: TokenUsage): number =>
   usage.inputTokens + (usage.cacheReadTokens ?? 0) + (usage.cacheWriteTokens ?? 0)
 
-/** The usage one durable Assistant settlement reports for its attempt, if any. */
-function usageOf(event: SessionEvent): TokenUsage | undefined {
+/** Read the final provider-reported usage carried by one Assistant settlement.
+ * @param event - committed event from a Session log.
+ * @returns the final usage, if recorded.
+ */
+export function usageOf(event: SessionEvent): TokenUsage | undefined {
   if (event.type === 'assistant/message' && event.data.usage !== undefined) return event.data.usage
   if (event.type !== 'assistant/message' && event.type !== 'assistant/attempt') return undefined
   return lastAssistantStreamChunk(event.data.stream, 'usage')?.usage

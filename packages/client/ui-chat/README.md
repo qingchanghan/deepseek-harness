@@ -64,6 +64,10 @@ Generic command rows retain the ordinary command glyph in every lifecycle state;
 <a id="turn-token-usage"></a>
 ## Turn token usage
 
+The composer usage indicator shows an estimated Session cost beside the cache-hit rate when rates are configured. Set `ui-chat.config.modelPricing` in the local profile with an ISO 4217 `currency` and `rates` keyed by exact provider and model IDs. Prices are per million tokens in that currency. Enter `input`, `cacheRead`, `output`, and `cacheWrite` where separately priced. Add overrides in `tiers` with `abovePromptTokens` for contracts that charge higher-context requests differently.
+
+The sidebar **Usage costs** page groups recorded input and output costs by day or month in China Standard Time. It covers the local Host and connected SSH Hosts, including archived Sessions. Estimates apply the current configured rates to historical usage. Disconnected Hosts, unreadable Session usage, and missing rates make the displayed total partial.
+
 A completed Turn shows an expandable usage row only when the loaded window includes `turn/start` and every started model attempt reports safe, exact usage. The row omits unavailable optional buckets. Incomplete or contradictory accounting hides the complete disclosure instead of presenting a partial total.
 
 Settings → General → Performance & usage appears after Send behavior while busy and before Session Log upload, and stores `ui-chat.performanceUsage` as `detailed` (default) or `compact`. Compact shows only available output speed and cache-hit percentage beneath the composer, without interactive statistic dialogs or per-Turn usage. Detailed exposes session statistics and per-Turn token usage. Neither mode shows elapsed time in the completed-turn footer. The preference changes presentation only; accounting and Session events remain intact.

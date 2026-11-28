@@ -24,6 +24,8 @@ export interface Config {
   performanceUsage: Volatile<PerformanceUsageMode>
   /** Default destination for Chat HTTP(S) links. */
   linkOpening: Volatile<LinkOpening>
+  /** Optional rates for estimating the cost of provider usage. */
+  modelPricing?: Volatile<ChatSettings['modelPricing']>
 }
 
 /** Live preferences projected to the browser. */
@@ -32,6 +34,7 @@ export const Config = z.object({
   collapseTiming: ChatSettingsFields.collapseTiming.volatile(),
   performanceUsage: ChatSettingsFields['performanceUsage'].volatile(),
   linkOpening: ChatSettingsFields.linkOpening.volatile(),
+  modelPricing: ChatSettingsFields.modelPricing.volatile(),
 })
 
 /** Host preferences are consumed through the configuration form projection.

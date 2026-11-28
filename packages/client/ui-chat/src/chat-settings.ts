@@ -58,6 +58,39 @@ export type LinkOpening = 'sidebar' | 'new-tab'
 /** Preserve the built-in browser for users without an explicit preference. */
 export const DEFAULT_LINK_OPENING: LinkOpening = 'sidebar'
 
+/** Rates in the configured currency per million provider tokens. */
+export interface ModelTokenPrice {
+  /** Uncached input. */
+  input: number
+  /** Cached input reads. */
+  cacheRead: number
+  /** Generated output, including reasoning reported as output. */
+  output: number
+  /** Cache writes when the provider reports a separate bucket. */
+  cacheWrite?: number
+}
+
+/** Per-model rates and optional higher-context price tiers. */
+export interface ModelPriceList extends ModelTokenPrice {
+  /** Each tier applies above its prompt-token threshold; highest qualifying threshold wins. */
+  tiers?: readonly (ModelTokenPrice & { abovePromptTokens: number })[]
+}
+
+/** User-supplied MaaS or other provider price list for all connected Hosts. */
+export interface ModelPricing {
+  /** ISO 4217 currency code for all listed rates. */
+  currency: string
+  /** Exact provider route ID, then exact provider-owned model ID. */
+  rates: Record<string, Record<string, ModelPriceList>>
+}
+
+const modelTokenPriceFields = {
+  input: z.number().min(0).required(),
+  cacheRead: z.number().min(0).required(),
+  output: z.number().min(0).required(),
+  cacheWrite: z.number().min(0),
+}
+
 /** Durable Chat section shared by the Host schema and browser scope. */
 export interface ChatSettings {
   /** Work-details preference; absence uses the client default, and legacy saved values remain accepted. */
@@ -68,6 +101,8 @@ export interface ChatSettings {
   performanceUsage: PerformanceUsageMode
   /** Default destination for Chat HTTP(S) links. */
   linkOpening: LinkOpening
+  /** Optional price list shared by the estimate and report. */
+  modelPricing?: ModelPricing | null
 }
 
 /** Durable Chat schema; also the wire envelope the browser scope validates against. */
@@ -75,6 +110,16 @@ export const ChatSettingsFields = {
   [COLLAPSE_TIMING_FIELD]: z.union([...COLLAPSE_TIMINGS]).default(DEFAULT_COLLAPSE_TIMING),
   linkOpening: z.union(['sidebar', 'new-tab']).default(DEFAULT_LINK_OPENING),
   performanceUsage: z.union([...PERFORMANCE_USAGE_MODES]).default(DEFAULT_PERFORMANCE_USAGE),
+  modelPricing: z.union([z.const(null), z.object({
+    currency: z.string().pattern(/^[A-Z]{3}$/).required(),
+    rates: z.dict(z.dict(z.object({
+      ...modelTokenPriceFields,
+      tiers: z.array(z.object({
+        ...modelTokenPriceFields,
+        abovePromptTokens: z.natural().required(),
+      })),
+    }))).required(),
+  })]),
   // Missing and unrecognized modes defer to the client's default.
   [TRANSCRIPT_VIEW_FIELD]: z.union([...TRANSCRIPT_VIEW_SETTING_VALUES]).loose(),
 }

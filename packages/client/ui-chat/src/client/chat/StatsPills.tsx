@@ -12,6 +12,8 @@ import type { InjectFace, SnapshotSelectorHook } from '@deepseek-ai/dsh-client-u
 // Type-only: merges the sessionStats key into SessionProjectionMap for useProjection.
 import type {} from '@deepseek-ai/dsh-session-stats/client'
 import type { TokenUsageProjection } from '@deepseek-ai/dsh-token-meter/client'
+import type { ModelPricing } from '../../chat-settings.ts'
+import { estimateCost, formatCost } from '../usage/cost.ts'
 import type { ChatViewSlotProps, PerformanceUsageInjected } from '../contract/slots.ts'
 import type { ChatSnapshot } from '../contract/snapshot.ts'
 import { formatTokensPerSecond } from './message-chrome.ts'
@@ -125,6 +127,8 @@ type Translate = ChatViewSlotProps['t']
 export interface StatPillProps extends InjectFace<PerformanceUsageInjected> {
   useChat: SnapshotSelectorHook<ChatSnapshot>
   useProjection: UseProjection
+  /** Optional estimate configuration supplied by the Chat settings. */
+  usePricing?: SnapshotSelectorHook<ModelPricing | undefined>
   /** The owning dock's locale seat. */
   t: Translate
 }
@@ -142,7 +146,7 @@ function exactCount(value: number, t: Translate): string {
   return t('message.turnUsage.count', { count: formatExactTokens(value, t) })
 }
 
-function joined(first: string, second: string | null): ReactNode {
+function joined(first: ReactNode, second: string | null): ReactNode {
   if (second === null) return first
   return (
     <>
@@ -279,17 +283,33 @@ export const ActivityPill = memo(function ActivityPill({ useChat, useProjection,
 })
 
 /** Whole-log token total and cache hit; Compact keeps only the cache hit. */
-export const UsagePill = memo(function UsagePill({ useProjection, usePerformanceUsage, t }: StatPillProps) {
+export const UsagePill = memo(function UsagePill({
+  useProjection, usePerformanceUsage, usePricing = select => select(undefined), t,
+}: StatPillProps) {
   const mode = usePerformanceUsage(value => value)
   const usage = useProjection('tokenUsage')
+  const buckets = useProjection('modelUsage')
+  const pricing = usePricing(value => value)
+  const cost = useMemo(
+    () => pricing === undefined || buckets === undefined ? undefined : estimateCost(buckets, pricing),
+    [buckets, pricing],
+  )
   // Gated on actual token activity: a session whose steps all settled without
   // billing (e.g. every request failed) shows no usage pill.
   if (usage === undefined || (billedInputTokens(usage) === 0 && usage.outputTokens === 0)) return null
   const cacheHit = cacheHitPercent(usage)
   const cacheHitText = cacheHit !== null ? t('stats.cacheHit', { percent: cacheHit }) : null
+  const estimate = pricing === undefined || cost === undefined || cost.pricedTokens === 0
+    ? null
+    : formatCost(cost.amount, pricing.currency)
+  const costText = cost === undefined || (cost.pricedTokens === 0 && cost.unpricedTokens === 0) ? null
+    : estimate === null ? t('usage.unpricedShort')
+      : cost.unpricedTokens > 0 ? t('usage.partial', { amount: estimate })
+        : t('usage.estimate', { amount: estimate })
+  const suffix = cacheHitText === null ? costText : joined(cacheHitText, costText)
   const icon = <IconDatabaseOutlineRegular />
   if (mode === 'compact') {
-    return cacheHitText === null ? null : <PlainPill stat="usage" icon={icon} label={cacheHitText} />
+    return suffix === null ? null : <PlainPill stat="usage" icon={icon} label={suffix} />
   }
   // Same aggregate as the Turn pill's totalTokens: every prompt-side billing bucket plus output.
   const total = billedInputTokens(usage) + usage.outputTokens
@@ -298,8 +318,8 @@ export const UsagePill = memo(function UsagePill({ useProjection, usePerformance
     <DialogPill
       stat="usage"
       icon={icon}
-      label={joined(totalText, cacheHitText)}
-      ariaLabel={cacheHitText === null ? totalText : `${totalText} · ${cacheHitText}`}
+      label={joined(joined(totalText, cacheHitText), costText)}
+      ariaLabel={[totalText, cacheHitText, costText].filter(Boolean).join(' · ')}
       title={t('stats.dialog.usageTitle')}
       titleValue={exactCount(total, t)}
     >
@@ -327,6 +347,10 @@ export const UsagePill = memo(function UsagePill({ useProjection, usePerformance
         )}
         <dt>{t('message.turnUsage.output')}</dt>
         <dd>{exactCount(usage.outputTokens, t)}</dd>
+        {costText !== null && <>
+          <dt>{t('usage.sessionEstimate')}</dt>
+          <dd>{costText}</dd>
+        </>}
       </dl>
       {/* jscpd:ignore-end */}
     </DialogPill>

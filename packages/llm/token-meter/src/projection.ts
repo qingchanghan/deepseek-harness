@@ -17,6 +17,18 @@ export interface TokenUsageProjection {
   cacheWriteTokens: number
 }
 
+/** Tokens incurred by this Session in one UTC hour on one model route. */
+export interface ModelUsageBucket extends TokenUsageProjection {
+  /** UTC hour start in Unix epoch milliseconds. */
+  hour: number
+  /** Total prompt tokens in each contributing request, used to select a price tier. */
+  promptTokens: number
+  /** Provider route from the request or Assistant settlement. */
+  provider: string | null
+  /** Provider-owned model ID, or null if the log lacks its identity. */
+  model: string | null
+}
+
 /**
  * Approximate context occupancy for a status display.
  *
@@ -69,6 +81,8 @@ declare module '@deepseek-ai/dsh-session-projection/types' {
   interface SessionProjectionMap {
     /** Provider-reported usage accumulated across the complete durable log. */
     tokenUsage: TokenUsageProjection
+    /** Billable samples by UTC hour and route, excluding the inherited prefix of forks. */
+    modelUsage: readonly ModelUsageBucket[]
     /** Newest request pressure paired with the newest known route capacity. */
     contextPressure: ContextPressureProjection
     /** Heuristic system/tools/message composition of the next request. */

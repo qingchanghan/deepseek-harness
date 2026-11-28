@@ -6,7 +6,7 @@ import SessionStore from '@deepseek-ai/dsh-session'
 import type { Session, SessionSeq } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import TokenMeter from '@deepseek-ai/dsh-token-meter'
-import type { ContextPressureProjection, TokenUsageProjection } from '@deepseek-ai/dsh-token-meter/client'
+import type { ContextPressureProjection, ModelUsageBucket, TokenUsageProjection } from '@deepseek-ai/dsh-token-meter/client'
 import { RetryId } from '@deepseek-ai/dsh-llm-retry'
 import type { ContextFormed } from '@deepseek-ai/dsh-llm'
 import { CompactionId } from '@deepseek-ai/dsh-compaction'
@@ -72,6 +72,37 @@ function finalUsage(
   }, { surfaceOp: 'append' })
   session.append('step/end', { turn, step })
 }
+
+describe('model usage attribution', () => {
+  const usage = { inputTokens: 10, cacheReadTokens: 40, cacheWriteTokens: 5, outputTokens: 3 }
+
+  it('prices the new calls on a fork without charging the inherited prefix', async () => {
+    const { ctx, session } = await harness()
+    session.append('turn/start', { turn: 1 })
+    startStep(session, 1, 1)
+    finalUsage(session, usage, 1, 1)
+    session.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
+    const read = (value: Session): readonly ModelUsageBucket[] | undefined => ctx.sessionProjections.snapshot(value).values.modelUsage
+    expect(read(session)).toEqual([expect.objectContaining({ provider: 'mock', model: 'mock', promptTokens: 55, outputTokens: 3 })])
+    const fork = ctx.sessions.fork(session)
+    expect(read(fork)).toEqual([])
+    fork.append('turn/start', { turn: 2 })
+    startStep(fork, 2, 1)
+    finalUsage(fork, { ...usage, inputTokens: 20 }, 2, 1)
+    expect(read(fork)).toEqual([expect.objectContaining({ promptTokens: 65, outputTokens: 3 })])
+  })
+
+  it('replaces the retry slot with final usage for the same attempt', async () => {
+    const { ctx, session } = await harness()
+    session.append('turn/start', { turn: 1 })
+    startStep(session, 1, 1)
+    usageChunk(session, usage, 1, 1)
+    finalUsage(session, { ...usage, inputTokens: 20 }, 1, 1)
+    expect(ctx.sessionProjections.snapshot(session).values.modelUsage).toEqual([
+      expect.objectContaining({ provider: 'mock', model: 'mock', promptTokens: 65, outputTokens: 3 }),
+    ])
+  })
+})
 
 const projected = (ctx: Context, session: Session): TokenUsageProjection => {
   const value = ctx.sessionProjections.snapshot(session).values.tokenUsage

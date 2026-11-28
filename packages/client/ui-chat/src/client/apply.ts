@@ -17,7 +17,8 @@ import { writeClipboard } from '@deepseek-ai/dsh-client-ui-primitives'
 // Type-only service and declaration merges used by the apply world.
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
-import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
+import type { MainPanelId } from '@deepseek-ai/dsh-client-ui-layout/client'
+import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-session/client'
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
@@ -51,6 +52,10 @@ import { PerformanceUsagePolicy } from './performance-usage.ts'
 import { useTurnDataValue } from './chat/use-turn-data.ts'
 import { bindDisclosure } from './chat/use-disclosure.ts'
 import { useFlowHidden, useMotionHidden } from './chat/flow-motion.ts'
+import { UsagePage, UsagePanelIcon } from './usage/UsagePage.tsx'
+import { registerUsageReport } from './usage/report-resource.ts'
+
+const USAGE_PANEL = 'usage' as MainPanelId
 
 /** Bind group and header visibility to the viewport of one flow render. */
 export const CHAT_FLOW_INJECT: ChatFlowInjected = {
@@ -150,6 +155,19 @@ export function apply(ctx: Context): void {
   const chatStore = createChatStore()
   const chatScrollPositions = new Map<SessionId, ChatScrollPosition>()
   const chatSettings = ctx.configForms.get<ChatSettings>(CHAT_SETTINGS_NAMESPACE)
+  const pricing = {
+    getSnapshot: () => chatSettings.getSnapshot().value?.modelPricing ?? undefined,
+    subscribe: (listener: () => void) => chatSettings.subscribe(listener),
+  }
+  ctx.inject(['layout', 'resources', 'remote.remoteHosts'], (scope) => {
+    scope.effect(() => registerUsageReport(scope), 'ui-chat: usage report resource')
+    scope.slots.inject('main', () => scope.slots.register({
+      name: 'main', key: USAGE_PANEL, locale: NS, inject: () => ({ hooks: { pricing } }),
+    }, UsagePage))
+    scope.slots.inject('sidebar.panellist', () => scope.slots.register({
+      name: 'sidebar.panellist', id: USAGE_PANEL, order: 6, locale: NS, label: () => t('usage.page'),
+    }, UsagePanelIcon))
+  })
   const linkOpening = createSnapshotStore(chatSettings.getSnapshot().value?.linkOpening ?? DEFAULT_LINK_OPENING)
   ctx.effect(() => chatSettings.subscribe(() => {
     const accepted = chatSettings.getSnapshot().value?.linkOpening
@@ -381,7 +399,7 @@ export function apply(ctx: Context): void {
       name: 'conversation.composer.dock', id: 'activity', order: 0, locale: NS, inject: statPillInject,
     }, ActivityPill)
     yield ctx.slots.register({
-      name: 'conversation.composer.dock', id: 'usage', order: 1, locale: NS, inject: statPillInject,
+      name: 'conversation.composer.dock', id: 'usage', order: 1, locale: NS, inject: () => ({ hooks: { performanceUsage, pricing } }),
     }, UsagePill)
   })
 

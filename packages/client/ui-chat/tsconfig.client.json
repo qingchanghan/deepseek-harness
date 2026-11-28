@@ -94,6 +94,12 @@
       "path": "../ui-session"
     },
     {
+      "path": "../resources"
+    },
+    {
+      "path": "../ui-sidebar"
+    },
+    {
       "path": "../ui-sidebar-browser/tsconfig.client.json"
     },
     {

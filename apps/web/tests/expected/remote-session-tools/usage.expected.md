@@ -1,0 +1,3 @@
+- listitem:
+  - time: 2026-04
+  - text: ¥1.30

@@ -30,6 +30,7 @@ import type {
   TokenMeasurementBaseline,
   TokenMeterConfig,
 } from './types.ts'
+import { modelUsageProjectionDefinition } from './model-usage.ts'
 import { contextBreakdownProjectionDefinition } from './breakdown-projection.ts'
 import { contextPressureProjectionDefinition, tokenUsageProjectionDefinition } from './usage-projection.ts'
 import { estimateContent, estimateMessage, estimateToolsTokens, ROLE_OVERHEAD } from './estimate.ts'
@@ -42,6 +43,7 @@ export type * from './types.ts'
 // projection-unit modules, so their SessionProjectionStateMap augmentations load
 // in aggregate programs that only import the package root.
 export type * from './usage-projection.ts'
+export type * from './model-usage.ts'
 export type * from './breakdown-projection.ts'
 
 /**
@@ -112,6 +114,7 @@ export class TokenMeter extends Service {
     validateConfigKeys(config)
 
     ctx.sessionProjections.register(tokenUsageProjectionDefinition)
+    ctx.sessionProjections.register(modelUsageProjectionDefinition)
     ctx.sessionProjections.register(contextPressureProjectionDefinition)
     ctx.sessionProjections.register(contextBreakdownProjectionDefinition)
 

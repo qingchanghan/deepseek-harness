@@ -34,6 +34,26 @@ function remoteFileFixture(): string {
     cwd: '{{cwd}}', isSeeded: false, delegationDepth: 0 }), ...session.snapshotEvents().map(event => JSON.stringify({ ...event, time: event.seq })), ''].join('\n')
 }
 
+/** A settled usage row with a known price and China calendar date. */
+function pricedFixture(day: string): string {
+  const session = Session.create(SessionId('priced-fixture-source'))
+  const usage = { inputTokens: 100_000, cacheReadTokens: 50_000, outputTokens: 10_000 }
+  session.append('turn/start', { turn: 1 })
+  session.append('step/start', { turn: 1, step: 1 })
+  session.append('assistant/message', {
+    turn: 1, step: 1, stream: [], usage,
+    message: createAssistantMessage({
+      content: [{ type: 'text', text: 'Priced model usage.' }],
+      source: { provider: 'priced-fixture', model: 'rated-model' },
+    }),
+  }, { surfaceOp: 'append' })
+  session.append('step/end', { turn: 1, step: 1 })
+  session.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
+  const time = Date.parse(day)
+  return [JSON.stringify({ type: 'session', version: SESSION_FORMAT_VERSION, id: '{{sessionId}}', createdAt: time,
+    cwd: '{{cwd}}', isSeeded: false, delegationDepth: 0 }), ...session.snapshotEvents().map(event => JSON.stringify({ ...event, time: time + event.seq })), ''].join('\n')
+}
+
 // The SSH process fixture uses a POSIX executable; Windows retains its native transport lane.
 describe.skipIf(process.platform === 'win32' || MODE === 'record')('web e2e: SSH remote hosts', () => {
   let local: WebScaffold
@@ -404,5 +424,34 @@ describe.skipIf(process.platform === 'win32' || MODE === 'record')('web e2e: SSH
     if (await drill.isVisible()) await drill.click()
     await page.getByRole('menuitemradio', { name: probe, exact: true }).click()
     await page.getByRole('button', { name: `选择模型，当前 ${probe}`, exact: true }).waitFor()
+  })
+
+  it('prices model usage by China calendar day and month across both Hosts', async () => {
+    const localId = await seedSession(local, pricedFixture('2026-03-30T16:30:00Z'), 'billed-local-session')
+    const remoteId = await seedSession(remote, pricedFixture('2026-03-31T16:30:00Z'), 'billed-remote-session')
+    await local.ctx.sessionController.rename({ sessionId: localId, title: 'Billed Local' })
+    await remote.ctx.sessionController.rename({ sessionId: remoteId, title: 'Billed SSH' })
+    await local.ctx.settings.update('ui-chat', {
+      modelPricing: {
+        currency: 'CNY', rates: { 'priced-fixture': { 'rated-model': { input: 10, cacheRead: 2, output: 20 } } },
+      },
+    })
+    await page.reload({ waitUntil: 'load' })
+    await page.getByRole('button', { name: '费用统计', exact: true }).click()
+    const report = page.getByRole('region', { name: '费用统计', exact: true })
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-usage-pricing'))
+    const rows = report.getByRole('listitem')
+    await rows.filter({ hasText: '2026-03-31' }).getByText(/1\.30/).waitFor()
+    await rows.filter({ hasText: '2026-04-01' }).getByText(/1\.30/).waitFor()
+    await report.getByText(/2\.60/).waitFor()
+    await report.getByRole('button', { name: '按月', exact: true }).click()
+    await rows.filter({ hasText: '2026-04' }).getByText(/1\.30/).waitFor()
+    await rows.filter({ hasText: '2026-03' }).getByText(/1\.30/).waitFor()
+    await page.setViewportSize({ width: 390, height: 844 })
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+    await page.setViewportSize({ width: 1280, height: 900 })
+    await compareOrRefreshGolden(join(INTERACTION_EXPECTED, 'usage.expected.md'),
+      await captureStableAria(page, '[data-usage-report] li:has(time[datetime="2026-04"])', remote.workspaceCwd), MODE)
+    expect(tripwire.pageErrors).toEqual([])
   })
 })
