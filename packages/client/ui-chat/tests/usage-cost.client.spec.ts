@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest'
 import type { ModelUsageBucket } from '@deepseek-ai/dsh-token-meter/client'
 import type { ModelPricing } from '../src/chat-settings.ts'
-import { estimateCost } from '../src/client/usage/cost.ts'
+import { estimateCost, formatCost } from '../src/client/usage/cost.ts'
 
 const pricing: ModelPricing = {
   currency: 'CNY',
@@ -26,10 +26,22 @@ describe('Session cost estimates', () => {
     expect(result.amount).toBeCloseTo(11.12005)
     expect(result.pricedTokens).toBe(592_001)
     expect(result.unpricedTokens).toBe(2_000)
+    expect(result.categories.input.amount).toBeCloseTo(6)
+    expect(result.categories.cacheRead.amount).toBeCloseTo(1.02)
+    expect(result.categories.cacheWrite.amount).toBeCloseTo(0.10005)
+    expect(result.categories.cacheWrite.unpricedTokens).toBe(2_000)
+    expect(result.categories.output.amount).toBeCloseTo(4)
   })
 
   it('does not count an unpriced route as free', () => {
     const result = estimateCost([{ ...bucket, provider: 'unpriced' }], pricing)
-    expect(result).toEqual({ amount: 0, pricedTokens: 0, unpricedTokens: 297_000 })
+    expect(result).toMatchObject({ amount: 0, pricedTokens: 0, unpricedTokens: 297_000 })
+    expect(result.categories.output).toEqual({ amount: 0, pricedTokens: 0, unpricedTokens: 25_000 })
+  })
+
+  it('rounds small and fractional charges only at display time', () => {
+    expect(formatCost(0.004, 'CNY')).toBe(formatCost(0, 'CNY'))
+    expect(formatCost(0.286, 'CNY')).toBe(formatCost(0.29, 'CNY'))
+    expect(formatCost(0.1, 'CNY')).toMatch(/0[.,]10/)
   })
 })

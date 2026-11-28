@@ -79,6 +79,17 @@
   margin: 0;
 }
 
+.billedTokens {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: end;
+  gap: 0 12px;
+}
+
+.tokenCost {
+  color: var(--dsw-alias-label-primary);
+}
+
 .details dd {
   color: var(--dsw-alias-label-secondary);
   font-variant-numeric: tabular-nums;

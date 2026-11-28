@@ -27,11 +27,12 @@ export function registerUsageReport(ctx: Context): () => void {
   return ctx.resources.register<'usage-report'>({
     protocol: 'usage-report',
     async *open(_address, { signal }) {
+      const aborted = () => signal.aborted
       const [sessions, hosts] = await Promise.all([
         ctx.remote.session.list({}, signal),
         ctx.remote.remoteHosts.describe(),
       ])
-      if (signal.aborted) return
+      if (aborted()) return
       if (!sessions.ok) {
         yield sessions
         return
@@ -43,7 +44,7 @@ export function registerUsageReport(ctx: Context): () => void {
       const rows: ModelUsageBucket[] = []
       let missingSessions = 0
       for (let index = 0; index < sessions.value.items.length; index += READ_CONCURRENCY) {
-        if (signal.aborted) return
+        if (aborted()) return
         const batch = sessions.value.items.slice(index, index + READ_CONCURRENCY)
         const samples = await Promise.all(batch.map(async (session) => {
           const hints = session.projections
@@ -56,7 +57,7 @@ export function registerUsageReport(ctx: Context): () => void {
           else for (const row of sample) rows.push(row)
         }
       }
-      if (signal.aborted) return
+      if (aborted()) return
       yield {
         ok: true,
         value: {

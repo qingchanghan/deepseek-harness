@@ -9,6 +9,14 @@ export interface Cost {
   unpricedTokens: number
 }
 
+/** Token categories that can have independent rates. */
+export type CostCategory = 'input' | 'cacheRead' | 'cacheWrite' | 'output'
+
+/** Session total and the cost of each token category. */
+export interface SessionCost extends Cost {
+  categories: Record<CostCategory, Cost>
+}
+
 /** Make independent totals for one Session or calendar period.
  * @returns a fresh set of zero totals.
  */
@@ -21,8 +29,14 @@ export function emptyCost(): Cost {
  * @param total - running estimate to update.
  * @param row - reported provider usage.
  * @param pricing - current price list, when configured.
+ * @param categories - optional breakdown to update alongside the total.
  */
-export function addCost(total: Cost, row: ModelUsageBucket, pricing: ModelPricing | undefined): void {
+export function addCost(
+  total: Cost,
+  row: ModelUsageBucket,
+  pricing: ModelPricing | undefined,
+  categories?: SessionCost['categories'],
+): void {
   const models = row.provider !== null && pricing !== undefined && Object.hasOwn(pricing.rates, row.provider)
     ? pricing.rates[row.provider] : undefined
   const prices = row.model !== null && models !== undefined && Object.hasOwn(models, row.model)
@@ -35,17 +49,24 @@ export function addCost(total: Cost, row: ModelUsageBucket, pricing: ModelPricin
       selectedThreshold = tier.abovePromptTokens
     }
   }
-  for (const [tokens, unit] of [
-    [row.uncachedInputTokens, rate?.input],
-    [row.cacheReadTokens, rate?.cacheRead],
-    [row.cacheWriteTokens, rate?.cacheWrite],
-    [row.outputTokens, rate?.output],
+  for (const [category, tokens] of [
+    ['input', row.uncachedInputTokens],
+    ['cacheRead', row.cacheReadTokens],
+    ['cacheWrite', row.cacheWriteTokens],
+    ['output', row.outputTokens],
   ] as const) {
-    if (unit === undefined) total.unpricedTokens += tokens
-    else {
-      total.amount += (tokens * unit) / 1_000_000
-      total.pricedTokens += tokens
-    }
+    const unit = rate?.[category]
+    const amount = unit === undefined ? undefined : (tokens * unit) / 1_000_000
+    recordCost(total, tokens, amount)
+    if (categories !== undefined) recordCost(categories[category], tokens, amount)
+  }
+}
+
+function recordCost(cost: Cost, tokens: number, amount: number | undefined): void {
+  if (amount === undefined) cost.unpricedTokens += tokens
+  else {
+    cost.amount += amount
+    cost.pricedTokens += tokens
   }
 }
 
@@ -53,24 +74,24 @@ export function addCost(total: Cost, row: ModelUsageBucket, pricing: ModelPricin
  * Estimate the cost of a whole Session.
  * @param rows - model-hour buckets excluding inherited usage.
  * @param pricing - current price list, when configured.
- * @returns estimated amount and rate coverage.
+ * @returns total and per-category amounts and rate coverage.
  */
-export function estimateCost(rows: readonly ModelUsageBucket[], pricing: ModelPricing | undefined): Cost {
-  const total = emptyCost()
-  for (const row of rows) addCost(total, row, pricing)
+export function estimateCost(rows: readonly ModelUsageBucket[], pricing: ModelPricing | undefined): SessionCost {
+  const categories = { input: emptyCost(), cacheRead: emptyCost(), cacheWrite: emptyCost(), output: emptyCost() }
+  const total = { ...emptyCost(), categories }
+  for (const row of rows) addCost(total, row, pricing, categories)
   return total
 }
 
 /**
- * Display small charges without rounding them to a zero display.
+ * Display a charge rounded to two decimal places.
  * @param amount - non-negative estimate in the configured currency.
  * @param currency - ISO 4217 code.
  * @returns formatted total with currency.
  */
 export function formatCost(amount: number, currency: string): string {
   const format = new Intl.NumberFormat(undefined, {
-    style: 'currency', currency, minimumFractionDigits: 2, maximumFractionDigits: 6,
+    style: 'currency', currency, minimumFractionDigits: 2, maximumFractionDigits: 2,
   })
-  if (amount > 0 && amount < 0.000001) return `< ${format.format(0.000001)}`
   return format.format(amount)
 }

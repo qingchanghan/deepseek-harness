@@ -5,11 +5,11 @@ import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-cli
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
 import type { ModelPricing } from '../../chat-settings.ts'
 import { addCost, emptyCost, formatCost, type Cost } from './cost.ts'
+import { chinaDay, pricedAmount, UsageCalendar, type UsageDay } from './UsageCalendar.tsx'
 import { formatExactTokens } from '../chat/token-format.ts'
 import css from './UsagePage.module.css'
 
 type Period = 'day' | 'month'
-const chinaDate = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Shanghai', dateStyle: 'short' })
 
 /** Local price settings shared by the Session estimate and the report. */
 export interface UsagePageInjected {
@@ -41,23 +41,27 @@ export function UsagePage({ useResource, usePricing, t }: UsagePageProps) {
   const resource = useResource<'usage-report'>(`dsh-resource://usage-report/all?revision=${revision}`)
   const report = resource.value
   const rows = report?.rows
-  const { totals, periods } = useMemo(() => {
+  const { totals, days, months } = useMemo(() => {
     const totals = emptyCost()
-    const groups = new Map<string, Cost>()
+    const days = new Map<string, UsageDay>()
+    const byMonth = new Map<string, Cost>()
     for (const row of rows ?? []) {
-      const day = chinaDate.format(row.hour)
+      const day = chinaDay(row.hour)
       if (day < from || (through !== '' && day > through)) continue
       addCost(totals, row, pricing)
-      const key = period === 'day' ? day : day.slice(0, 7)
-      const cost = groups.get(key) ?? emptyCost()
-      addCost(cost, row, pricing)
-      groups.set(key, cost)
+      const group = days.get(day) ?? { cost: emptyCost(), rows: [] }
+      addCost(group.cost, row, pricing)
+      group.rows.push(row)
+      days.set(day, group)
+
+      const month = day.slice(0, 7)
+      const subtotal = byMonth.get(month) ?? emptyCost()
+      addCost(subtotal, row, pricing)
+      byMonth.set(month, subtotal)
     }
-    return { totals, periods: [...groups].sort(([left], [right]) => right.localeCompare(left)) }
-  }, [rows, pricing, period, from, through])
-  const peak = periods.reduce((max, [, cost]) => Math.max(max, cost.amount), 0)
-  const amount = (cost: Cost) => pricing !== undefined && cost.pricedTokens > 0
-    ? formatCost(cost.amount, pricing.currency) : '—'
+    return { totals, days, months: [...byMonth].sort(([left], [right]) => right.localeCompare(left)) }
+  }, [rows, pricing, from, through])
+  const peak = months.reduce((max, [, cost]) => Math.max(max, cost.amount), 0)
   const refresh = () => { setRevision(value => value + 1) }
   return <section className={css.page} data-usage-report aria-label={t('usage.page')}>
     <header className={css.header}>
@@ -73,14 +77,14 @@ export function UsagePage({ useResource, usePricing, t }: UsagePageProps) {
       <div className={css.range} role="group" aria-label={t('usage.dateRange')}>
         <label>
           <span>{t('usage.startDate')}</span>
-          <input type="date" value={from} aria-invalid={rangeInvalid}
-            onChange={(event) => { setFrom(event.target.value) }}
+          <input type="date" value={from} max="9999-12-31" aria-invalid={rangeInvalid}
+            onChange={(event) => { if (event.target.validity.valid) setFrom(event.target.value) }}
           />
         </label>
         <label>
           <span>{t('usage.endDate')}</span>
-          <input type="date" value={through} aria-invalid={rangeInvalid}
-            onChange={(event) => { setThrough(event.target.value) }}
+          <input type="date" value={through} max="9999-12-31" aria-invalid={rangeInvalid}
+            onChange={(event) => { if (event.target.validity.valid) setThrough(event.target.value) }}
           />
         </label>
         <Button variant="ghost" disabled={from === '' && through === ''} onClick={() => { setFrom(''); setThrough('') }}>
@@ -91,7 +95,7 @@ export function UsagePage({ useResource, usePricing, t }: UsagePageProps) {
         <div className={css.summary}>
           <div>
             <span>{t('usage.total')}</span>
-            <strong>{amount(totals)}</strong>
+            <strong>{pricing !== undefined && totals.pricedTokens > 0 ? formatCost(totals.amount, pricing.currency) : '—'}</strong>
           </div>
           <div className={css.period} role="group" aria-label={t('usage.period')}>
             <Button variant={period === 'day' ? 'primary' : 'outline'} aria-pressed={period === 'day'} onClick={() => { setPeriod('day') }}>{t('usage.daily')}</Button>
@@ -105,18 +109,18 @@ export function UsagePage({ useResource, usePricing, t }: UsagePageProps) {
             sessions: report.missingSessions, hosts: report.unavailableHosts,
           })}</p>
         )}
-        {periods.length === 0 ? <p className={css.note}>{t('usage.empty')}</p> : (
-          <ul className={css.rows}>
-            {periods.map(([date, cost]) => <li key={date} className={css.row}>
-              <time dateTime={date}>{date}</time>
-              <span className={css.barTrack} aria-hidden>
-                <span className={css.bar} style={{ width: `${peak === 0 ? 0 : cost.amount * 100 / peak}%` }} />
-              </span>
-              <span className={css.value}>{cost.pricedTokens > 0 && cost.unpricedTokens > 0
-                ? t('usage.partial', { amount: amount(cost) }) : amount(cost)}</span>
-            </li>)}
-          </ul>
-        )}
+        {period === 'day' ? <UsageCalendar days={days} from={from} through={through} pricing={pricing} t={t} />
+          : months.length === 0 ? <p className={css.note}>{t('usage.empty')}</p> : (
+            <ul className={css.rows}>
+              {months.map(([date, cost]) => <li key={date} className={css.row}>
+                <time dateTime={date}>{date}</time>
+                <span className={css.barTrack} aria-hidden>
+                  <span className={css.bar} style={{ width: `${peak === 0 ? 0 : cost.amount * 100 / peak}%` }} />
+                </span>
+                <span className={css.value}>{pricedAmount(cost, pricing, t)}</span>
+              </li>)}
+            </ul>
+          )}
       </>}
     </div>}
   </section>

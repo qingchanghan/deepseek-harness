@@ -13,7 +13,7 @@ import type { InjectFace, SnapshotSelectorHook } from '@deepseek-ai/dsh-client-u
 import type {} from '@deepseek-ai/dsh-session-stats/client'
 import type { TokenUsageProjection } from '@deepseek-ai/dsh-token-meter/client'
 import type { ModelPricing } from '../../chat-settings.ts'
-import { estimateCost, formatCost } from '../usage/cost.ts'
+import { estimateCost, formatCost, type CostCategory } from '../usage/cost.ts'
 import type { ChatViewSlotProps, PerformanceUsageInjected } from '../contract/slots.ts'
 import type { ChatSnapshot } from '../contract/snapshot.ts'
 import { formatTokensPerSecond } from './message-chrome.ts'
@@ -305,7 +305,7 @@ export const UsagePill = memo(function UsagePill({
   const costText = cost === undefined || (cost.pricedTokens === 0 && cost.unpricedTokens === 0) ? null
     : estimate === null ? t('usage.unpricedShort')
       : cost.unpricedTokens > 0 ? t('usage.partial', { amount: estimate })
-        : t('usage.estimate', { amount: estimate })
+        : estimate
   const suffix = cacheHitText === null ? costText : joined(cacheHitText, costText)
   const icon = <IconDatabaseOutlineRegular />
   if (mode === 'compact') {
@@ -314,6 +314,23 @@ export const UsagePill = memo(function UsagePill({
   // Same aggregate as the Turn pill's totalTokens: every prompt-side billing bucket plus output.
   const total = billedInputTokens(usage) + usage.outputTokens
   const totalText = t('message.turnUsage.count', { count: formatTokens(total, t) })
+  const tokenDetails = (count: number, category: CostCategory) => {
+    const part = cost?.categories[category]
+    const amount = pricing === undefined || part === undefined ? null
+      : part.pricedTokens === 0 && count > 0 ? t('usage.unpricedShort')
+        : formatCost(part.amount, pricing.currency)
+    return (
+      <dd className={dialogCss.billedTokens}>
+        <span>{exactCount(count, t)}</span>
+        {amount !== null && (
+          <span className={dialogCss.tokenCost}>
+            {part !== undefined && part.pricedTokens > 0 && part.unpricedTokens > 0
+              ? t('usage.partial', { amount }) : amount}
+          </span>
+        )}
+      </dd>
+    )
+  }
   return (
     <DialogPill
       stat="usage"
@@ -336,19 +353,19 @@ export const UsagePill = memo(function UsagePill({
           </>
         )}
         <dt>{t('message.turnUsage.input')}</dt>
-        <dd>{exactCount(usage.uncachedInputTokens, t)}</dd>
+        {tokenDetails(usage.uncachedInputTokens, 'input')}
         <dt>{t('message.turnUsage.cacheRead')}</dt>
-        <dd>{exactCount(usage.cacheReadTokens, t)}</dd>
+        {tokenDetails(usage.cacheReadTokens, 'cacheRead')}
         {usage.cacheWriteTokens !== 0 && (
           <>
             <dt>{t('message.turnUsage.cacheWrite')}</dt>
-            <dd>{exactCount(usage.cacheWriteTokens, t)}</dd>
+            {tokenDetails(usage.cacheWriteTokens, 'cacheWrite')}
           </>
         )}
         <dt>{t('message.turnUsage.output')}</dt>
-        <dd>{exactCount(usage.outputTokens, t)}</dd>
+        {tokenDetails(usage.outputTokens, 'output')}
         {costText !== null && <>
-          <dt>{t('usage.sessionEstimate')}</dt>
+          <dt>{t('usage.sessionCost')}</dt>
           <dd>{costText}</dd>
         </>}
       </dl>

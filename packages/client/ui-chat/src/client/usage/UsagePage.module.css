@@ -29,7 +29,8 @@
 
 .report {
   margin-top: 20px;
-  max-width: 800px;
+  max-width: 1080px;
+  container-type: inline-size;
 }
 
 .summary {
@@ -40,7 +41,7 @@
 .summary strong {
   display: block;
   margin-top: 4px;
-  font-size: 18px;
+  font-size: 24px;
   font-weight: 500;
   font-variant-numeric: tabular-nums;
 }
@@ -118,4 +119,170 @@
   background: var(--dsw-alias-bg-base);
   color: inherit;
   font: inherit;
+}
+
+.calendarLayout {
+  display: grid;
+  gap: 16px;
+  margin-top: 20px;
+}
+
+@container (min-width: 744px) {
+  .calendarLayout {
+    grid-template-columns: minmax(0, 1.85fr) minmax(0, 1fr);
+    align-items: start;
+  }
+}
+
+.calendar, .dayDetail {
+  min-width: 0;
+  padding: clamp(8px, 2cqw, 16px);
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-lg);
+  background: var(--dsw-alias-bg-layer-1);
+}
+
+.calendarHeader, .detailHeader, .dayTotal, .modelRows li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.detailHeader {
+  flex-wrap: wrap;
+}
+
+.calendarHeader h2, .detailHeader h2, .dayDetail h3 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.calendarHeader h2 {
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+}
+
+.weekdays, .days {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 2px;
+}
+
+.weekdays {
+  margin: 8px 0 4px;
+  text-align: center;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+}
+
+.day, .blankDay {
+  min-height: clamp(44px, 9cqw, 64px);
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-base);
+}
+
+.day {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 4px;
+  min-width: 0;
+  padding: 4px;
+  color: var(--dsw-alias-label-secondary);
+  font: inherit;
+  text-align: start;
+  font-variant-numeric: tabular-nums;
+}
+
+.blankDay, .day:disabled {
+  border-color: transparent;
+  background: transparent;
+}
+
+.day:not(:disabled) {
+  cursor: pointer;
+}
+
+.day[data-has-usage="true"] .dayNumber {
+  color: var(--dsw-alias-label-primary);
+}
+
+.day[data-has-usage="true"] {
+  background: color-mix(in oklab, var(--dsw-alias-brand-primary) 4%, var(--dsw-alias-bg-base));
+}
+
+.day[aria-current="date"] .dayNumber,
+.detailHeader time,
+.dayAmount {
+  color: var(--dsw-alias-brand-text);
+}
+
+.dayAmount {
+  max-width: 100%;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+@media (hover: hover) {
+  .day:hover:not(:disabled) {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
+}
+
+.day[aria-pressed="true"]:not(:disabled) {
+  border-color: var(--dsw-alias-brand-primary);
+  background: var(--dsw-alias-interactive-bg-hover-accent);
+}
+
+.day:focus-visible {
+  position: relative;
+  z-index: 1;
+  outline: 2px solid var(--dsw-alias-brand-primary);
+  outline-offset: -2px;
+}
+
+.detailHeader time, .dayTotal strong, .modelRows .value {
+  font-variant-numeric: tabular-nums;
+}
+
+.dayTotal {
+  flex-wrap: wrap;
+  margin: 12px 0 16px;
+  padding: 10px 0;
+  border-block: 1px solid var(--dsw-alias-border-l2);
+}
+
+.dayTotal strong {
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.modelRows {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+}
+
+.modelRows li {
+  align-items: baseline;
+  padding: 8px 0;
+}
+
+.modelRows li + li {
+  border-top: 1px solid var(--dsw-alias-border-l2);
+}
+
+.model {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.model small {
+  display: block;
+  margin-top: 2px;
+  color: var(--dsw-alias-label-secondary);
 }

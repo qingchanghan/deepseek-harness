@@ -1,0 +1,9 @@
+- region "当日明细":
+  - heading "当日明细" [level=2]
+  - time: 2026-04-01
+  - text: 已计价总额
+  - strong: ¥3.90
+  - heading "模型费用" [level=3]
+  - list:
+    - listitem: rated-second-model priced-fixture ¥2.60
+    - listitem: rated-model priced-fixture ¥1.30

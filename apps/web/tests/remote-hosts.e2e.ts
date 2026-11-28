@@ -35,7 +35,7 @@ function remoteFileFixture(): string {
 }
 
 /** A settled usage row with a known price and China calendar date. */
-function pricedFixture(day: string): string {
+function pricedFixture(day: string, model = 'rated-model'): string {
   const session = Session.create(SessionId('priced-fixture-source'))
   const usage = { inputTokens: 100_000, cacheReadTokens: 50_000, outputTokens: 10_000 }
   session.append('turn/start', { turn: 1 })
@@ -44,7 +44,7 @@ function pricedFixture(day: string): string {
     turn: 1, step: 1, stream: [], usage,
     message: createAssistantMessage({
       content: [{ type: 'text', text: 'Priced model usage.' }],
-      source: { provider: 'priced-fixture', model: 'rated-model' },
+      source: { provider: 'priced-fixture', model },
     }),
   }, { surfaceOp: 'append' })
   session.append('step/end', { turn: 1, step: 1 })
@@ -429,38 +429,64 @@ describe.skipIf(process.platform === 'win32' || MODE === 'record')('web e2e: SSH
   it('prices model usage by China calendar day and month across both Hosts', async () => {
     const localId = await seedSession(local, pricedFixture('2026-03-30T16:30:00Z'), 'billed-local-session')
     const remoteId = await seedSession(remote, pricedFixture('2026-03-31T16:30:00Z'), 'billed-remote-session')
+    await seedSession(local, pricedFixture('2026-04-01T01:00:00Z', 'rated-second-model'), 'billed-second-model')
     await local.ctx.sessionController.rename({ sessionId: localId, title: 'Billed Local' })
     await remote.ctx.sessionController.rename({ sessionId: remoteId, title: 'Billed SSH' })
     await local.ctx.settings.update('ui-chat', {
       modelPricing: {
-        currency: 'CNY', rates: { 'priced-fixture': { 'rated-model': { input: 10, cacheRead: 2, output: 20 } } },
+        currency: 'CNY',
+        rates: { 'priced-fixture': {
+          'rated-model': { input: 10, cacheRead: 2, output: 20 },
+          'rated-second-model': { input: 20, cacheRead: 4, output: 40 },
+        } },
       },
     })
     await page.reload({ waitUntil: 'load' })
+    await page.getByRole('treeitem', { name: /Billed SSH/ }).waitFor()
     await page.getByRole('button', { name: '费用统计', exact: true }).click()
     const report = page.getByRole('region', { name: '费用统计', exact: true })
     onTestFailed(() => saveFailureShot(page, 'web-e2e-usage-pricing'))
-    const rows = report.getByRole('listitem')
-    await rows.filter({ hasText: '2026-03-31' }).getByText(/1\.30/).waitFor()
-    await rows.filter({ hasText: '2026-04-01' }).getByText(/1\.30/).waitFor()
-    await report.getByText(/2\.60/).waitFor()
+    await report.getByLabel('开始日期', { exact: true }).fill('2026-03-01')
+    await report.getByLabel('结束日期', { exact: true }).fill('2026-04-30')
+    const calendar = report.getByRole('region', { name: '费用日历', exact: true })
+    const daily = report.getByRole('region', { name: '当日明细', exact: true })
+    const aprilDay = calendar.getByRole('button', { name: /^2026-04-01.*3\.90/ })
+    await calendar.getByRole('button', { name: '上个月', exact: true }).click()
+    await calendar.getByRole('button', { name: /^2026-03-31.*1\.30/ }).click()
+    await daily.getByRole('listitem').filter({ hasText: 'rated-model' }).getByText(/1\.30/).waitFor()
+    await calendar.getByRole('button', { name: '下个月', exact: true }).click()
+    await calendar.getByRole('button', { name: '2026-04-02', exact: true }).click()
+    await daily.getByText('当天没有可统计的模型用量', { exact: true }).waitFor()
+    await aprilDay.click()
+    await daily.getByRole('listitem').filter({ hasText: 'rated-model' }).getByText(/1\.30/).waitFor()
+    await daily.getByRole('listitem').filter({ hasText: 'rated-second-model' }).getByText(/2\.60/).waitFor()
+    await report.getByText(/5\.20/).waitFor()
+    await compareOrRefreshGolden(join(INTERACTION_EXPECTED, 'usage-day.expected.md'),
+      await captureStableAria(page, '[data-usage-report] section[aria-label="当日明细"]', remote.workspaceCwd), MODE)
+    await page.setViewportSize({ width: 390, height: 844 })
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+    await page.setViewportSize({ width: 1280, height: 900 })
     await report.getByRole('button', { name: '按月', exact: true }).click()
-    await rows.filter({ hasText: '2026-04' }).getByText(/1\.30/).waitFor()
+    const rows = report.getByRole('listitem')
+    await rows.filter({ hasText: '2026-04' }).getByText(/3\.90/).waitFor()
     await rows.filter({ hasText: '2026-03' }).getByText(/1\.30/).waitFor()
     await report.getByLabel('开始日期', { exact: true }).fill('2026-04-01')
     await report.getByLabel('结束日期', { exact: true }).fill('2026-04-01')
     await expect.poll(() => rows.count()).toBe(1)
-    await report.getByText(/1\.30/).first().waitFor()
-    await expect.poll(() => report.getByText(/2\.60/).count()).toBe(0)
+    await rows.getByText(/3\.90/).waitFor()
+    await expect.poll(() => report.getByText(/5\.20/).count()).toBe(0)
     await report.getByLabel('结束日期', { exact: true }).fill('2026-03-31')
     await report.getByRole('alert').filter({ hasText: '结束日期须等于或晚于开始日期' }).waitFor()
     await report.getByRole('button', { name: '全部日期', exact: true }).click()
-    await report.getByText(/2\.60/).waitFor()
-    await page.setViewportSize({ width: 390, height: 844 })
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
-    await page.setViewportSize({ width: 1280, height: 900 })
+    await report.getByText(/5\.20/).waitFor()
     await compareOrRefreshGolden(join(INTERACTION_EXPECTED, 'usage.expected.md'),
       await captureStableAria(page, '[data-usage-report] li:has(time[datetime="2026-04"])', remote.workspaceCwd), MODE)
+    await page.getByRole('treeitem', { name: /Billed SSH/ }).click()
+    await page.getByRole('button', { name: /缓存命中.*1\.30/ }).click()
+    const usage = page.locator('[data-session-stats-usage]')
+    for (const amount of ['1.00', '0.10', '0.20', '1.30']) {
+      await usage.getByText(new RegExp(`[¥￥]\\s*${amount.replace('.', '\\.')}\\b`)).waitFor()
+    }
     expect(tripwire.pageErrors).toEqual([])
   })
 })
