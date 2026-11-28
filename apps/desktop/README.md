@@ -38,6 +38,8 @@ Desktop binds `127.0.0.1`, the address Electron dials for the ready URL and the 
 
 The first application-menu command, **About DeepSeek Harness**, opens Electron's native About panel with the application icon, product name, and installed release version. The menu follows the Desktop shell locale. On macOS, Hide, Hide Others, Show All, and Quit use localized labels; Hide and Quit include the DeepSeek Harness product name. These commands retain their native actions and shortcuts. macOS reads the icon from its application bundle, so an unpackaged development launch displays Electron's icon; Windows receives the packaged PNG.
 
+Right-click an HTTP(S) link and choose **Copy Link Address** to copy its URL. Selecting text still offers **Copy**.
+
 Desktop’s local native directory flow opens an Electron folder dialog attached to the application window, restoring, showing, and focusing that window first. Concurrent requests share one dialog; cancellation returns no path and failures remain retryable. Ordinary Web uses the Host chooser. Browse mode lists Host directories. On Linux without zenity or kdialog, automatic selection uses browse instead of the Electron dialog.
 
 Desktop ships one pnpm distribution at `resources/runtime/primary-runtime/dependencies/pnpm`. Build-time production installation, the installed `dsh` CLI, Creator and the Web Plugin Manager execute its `bin/pnpm.mjs` with Electron Node mode; package operations do not require pnpm on PATH. The private Node launcher environment applies only to package operations. Agent workspace dependencies copy the same self-contained primary-runtime payload into the Harness home and execute pnpm with its standalone Node.

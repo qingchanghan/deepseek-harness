@@ -275,8 +275,20 @@ function createWindow(preload: string, show = false, primary = false): BrowserWi
     window.on('restore', applyBackdrop)
     window.on('show', applyBackdrop)
   }
-  window.webContents.on('context-menu', (_event, { isEditable, selectionText, editFlags }) => {
+  window.webContents.on('context-menu', (_event, { isEditable, selectionText, editFlags, linkURL }) => {
     const items: MenuItemConstructorOptions[] = []
+    const messages = currentDesktopLocale().messages
+    const link = URL.parse(linkURL)
+    if (link !== null && (link.protocol === 'http:' || link.protocol === 'https:')) {
+      items.push({
+        label: messages.copyLinkAddress,
+        click: () => {
+          void clipboard.writeText(linkURL).catch(() => {
+            dialog.showErrorBox(messages.copyLinkAddress, messages.copyLinkFailed)
+          })
+        },
+      })
+    }
     if (isEditable) {
       items.push(
         { role: 'undo', enabled: editFlags.canUndo },
@@ -293,7 +305,6 @@ function createWindow(preload: string, show = false, primary = false): BrowserWi
     }
     // Empty accelerators suppress Electron's default shortcut labels for native roles.
     if (items.length > 0) {
-      const messages = currentDesktopLocale().messages
       Menu.buildFromTemplate(items.map(item => ({
         ...item,
         ...(process.platform === 'win32' && item.role !== undefined && item.role in messages
