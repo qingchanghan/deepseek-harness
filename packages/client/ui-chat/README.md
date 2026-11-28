@@ -66,7 +66,7 @@ Generic command rows retain the ordinary command glyph in every lifecycle state;
 
 The composer usage indicator shows an estimated Session cost beside the cache-hit rate when rates are configured. Set `ui-chat.config.modelPricing` in the local profile with an ISO 4217 `currency` and `rates` keyed by exact provider and model IDs. Prices are per million tokens in that currency. Enter `input`, `cacheRead`, `output`, and `cacheWrite` where separately priced. Add overrides in `tiers` with `abovePromptTokens` for contracts that charge higher-context requests differently.
 
-The sidebar **Usage costs** page groups recorded input and output costs by day or month in China Standard Time. It covers the local Host and connected SSH Hosts, including archived Sessions. Estimates apply the current configured rates to historical usage. Disconnected Hosts, unreadable Session usage, and missing rates make the displayed total partial.
+The sidebar **Usage costs** page groups recorded input and output costs by day or month in China Standard Time. The date range includes both endpoints and constrains each subtotal. It covers the local Host and connected SSH Hosts, including archived Sessions. Estimates apply the current configured rates to historical usage. Disconnected Hosts, unreadable Session usage, and missing rates make the displayed total partial.
 
 A completed Turn shows an expandable usage row only when the loaded window includes `turn/start` and every started model attempt reports safe, exact usage. The row omits unavailable optional buckets. Incomplete or contradictory accounting hides the complete disclosure instead of presenting a partial total.
 

@@ -92,3 +92,30 @@
   place-items: center;
   min-height: 50%;
 }
+
+.range {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 8px 12px;
+  padding-bottom: 10px;
+}
+
+.range label {
+  display: grid;
+  gap: 6px;
+  flex: 0 1 140px;
+  min-width: 0;
+}
+
+.range input {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 36px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-sm);
+  padding: 4px 8px;
+  background: var(--dsw-alias-bg-base);
+  color: inherit;
+  font: inherit;
+}

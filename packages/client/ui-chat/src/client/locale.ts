@@ -6,6 +6,11 @@ export const NS = 'chat'
 /** Simplified Chinese dictionary and key-set source of truth. */
 export const zh = {
   'usage.page': '费用统计',
+  'usage.dateRange': '日期范围',
+  'usage.startDate': '开始日期',
+  'usage.endDate': '结束日期',
+  'usage.allDates': '全部日期',
+  'usage.invalidRange': '结束日期须等于或晚于开始日期',
   'usage.basis': '本地和已连接主机 · 按北京时间和当前单价估算',
   'usage.refresh': '刷新',
   'usage.failed': '读取费用统计失败，请重试',
@@ -224,6 +229,11 @@ export type ChatKey = keyof typeof zh
 /** English dictionary, checked against the Chinese key set. */
 export const en = {
   'usage.page': 'Usage costs',
+  'usage.dateRange': 'Date range',
+  'usage.startDate': 'Start date',
+  'usage.endDate': 'End date',
+  'usage.allDates': 'All dates',
+  'usage.invalidRange': 'The end date must be on or after the start date.',
   'usage.basis': 'Local and connected hosts · China Standard Time · Current rates',
   'usage.refresh': 'Refresh',
   'usage.failed': 'Could not load usage costs. Try again.',
